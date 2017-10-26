@@ -84,14 +84,22 @@ class LastFM implements MusicService {
 	}
 
 	private Track toTrack(de.umass.lastfm.Track source) {
-		final SingleTrackAlbumBuilder builder = parser.parse(source.getName())
+		final SingleTrackAlbumBuilder builder = parseTrackTitle(source)
 				//.withCover(getBiggest(source))
 				//.withAlbumTitle(source.getAlbum()) TODO parse album title
 				.withMainArtists(artistFactory.getArtistsFromFormat(source.getArtist()))
 				.withDuration(Duration.ofSeconds(source.getDuration()));
 		final Track track = builder.getTrack();
-		track.setPlays(source.getPlaycount());
+		final long plays = source.getPlaycount();
+		if(plays > 0) {
+			track.setPlays(plays);
+		}
 		return track;
+	}
+
+	private SingleTrackAlbumBuilder parseTrackTitle(de.umass.lastfm.Track source) {
+		final SingleTrackAlbumBuilder result = parser.parse(source.getName());
+		return result.getScore() > 0 ? result : SingleTrackAlbumBuilder.create().withTitle(source.getName());
 	}
 
 	private byte[] getBiggest(MusicEntry source) {

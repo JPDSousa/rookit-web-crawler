@@ -6,8 +6,10 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -44,14 +46,18 @@ class LastFM implements MusicService {
 
 	private final String apiKey;
 	private final String user;
+	private final LastFMConfig config;
 
 	private final ArtistFactory artistFactory;
 	private final AlbumFactory albumFactory;
 	private final Parser<String, SingleTrackAlbumBuilder> parser;
+	private final LevenshteinDistance distance;
 
 	LastFM(LastFMConfig config) {
+		this.config = config;
 		this.apiKey = config.getApiKey();
 		this.user = config.getUser();
+		distance = LevenshteinDistance.getDefaultInstance();
 		final Caller caller = Caller.getInstance();
 		caller.setUserAgent("tst");
 		this.artistFactory = ArtistFactory.getDefault();
@@ -80,7 +86,8 @@ class LastFM implements MusicService {
 				.map(Artist::getName)
 				.map(name -> de.umass.lastfm.Track.search(name, trackTitle, 200, apiKey))
 				.flatMap(Collection::parallelStream)
-				.map(this::toTrack);
+				.map(this::toTrack)
+				.filter(Objects::nonNull);
 	}
 
 	private Track toTrack(de.umass.lastfm.Track source) {
@@ -131,7 +138,8 @@ class LastFM implements MusicService {
 				.map(de.umass.lastfm.Artist::getName)
 				.flatMap(this::searchArtistTracks)
 				.map(this::toTrack);
-		return Stream.concat(topTracks, allTracks);
+		return Stream.concat(topTracks, allTracks)
+				.filter(Objects::nonNull);
 	}
 
 	private Stream<de.umass.lastfm.Track> searchArtistTracks(String artistName) {
@@ -140,50 +148,58 @@ class LastFM implements MusicService {
 				.mapToObj(i -> User.getArtistTracks(user, artistName, i, 0, 0, apiKey))
 				.map(PaginatedResult::getPageResults)
 				.flatMap(Collection::parallelStream);
-		return Stream.concat(firstResults.getPageResults().parallelStream(), otherResults);
+		return Stream.concat(firstResults.getPageResults().parallelStream(), otherResults)
+				.filter(Objects::nonNull);
 	}
 
 	@Override
 	public Stream<Artist> searchArtist(Artist artist) {
 		return de.umass.lastfm.Artist.search(artist.getName(), apiKey).parallelStream()
-				.map(artistRes -> toArtist(artistRes, artist.getName()));
+				.map(artistRes -> toArtist(artistRes, artist.getName()))
+				.filter(Objects::nonNull);
 	}
 
 	private Artist toArtist(de.umass.lastfm.Artist source, String originalName) {
 		final Set<Artist> artists = artistFactory.getArtistsFromFormat(source.getName());
-		final List<String> names = artists.parallelStream()
+		final List<String> names = artists.stream()
 				.map(Artist::getName)
 				.collect(Collectors.toList());
 		final String name = bestMatch(names, originalName);
-		return artistFactory.createArtist(TypeArtist.GROUP, name);
+		return name != null ? artistFactory.createArtist(TypeArtist.GROUP, name) : null;
 	}
 
 	private String bestMatch(List<String> search, String str) {
 		if(search.isEmpty()) {
 			return null;
 		}
-		if(search.size() == 1) {
-			return search.get(0);
-		}
-		final LevenshteinDistance calculator = LevenshteinDistance.getDefaultInstance();
-		return StreamSupport.stream(search.spliterator(), true)
-				.map(searchStr -> Pair.of(searchStr, calculator.apply(searchStr, str)))
+		final String lowerString = str.toLowerCase();
+		return search.parallelStream()
+				.map(String::toLowerCase)
+				.filter(searchStr -> !containsAny(searchStr, Artist.SUSPICIOUS_NAME_CHARSEQS))
+				.map(searchStr -> Pair.of(searchStr, distance.apply(searchStr, lowerString)))
+				.filter(pair -> pair.getRight() >= 0)
+				.filter(pair -> pair.getRight() < config.getLevenshteinThreshold())
 				.reduce(this::compare)
 				.map(Pair::getLeft)
 				.orElse(null);
 	}
 
+	private boolean containsAny(String searchStr, String[] strs) {
+		return Arrays.stream(strs).anyMatch(str -> searchStr.contains(str));
+	}
+
 	private Pair<String, Integer> compare(Pair<String, Integer> left, Pair<String, Integer> right) {
 		final int leftScore = left.getRight();
 		final int rigthScore = right.getRight();
-		return leftScore > rigthScore ? left : right;
+		return leftScore < rigthScore ? left : right;
 	}
 
 	@Override
 	public Stream<Album> searchAlbum(Album album) {
 		return de.umass.lastfm.Album.search(album.getTitle(), apiKey)
 				.parallelStream()
-				.map(this::toAlbum);
+				.map(this::toAlbum)
+				.filter(Objects::nonNull);
 	}
 
 	private Album toAlbum(de.umass.lastfm.Album source) {
@@ -194,7 +210,7 @@ class LastFM implements MusicService {
 		final LocalDate releaseDate = source.getReleaseDate().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
 		album.setReleaseDate(releaseDate);
 		source.getTracks().forEach(track -> album.addTrack(toTrack(track), track.getPosition()));
-		//TODO add this fields
+		//TODO add these fields
 		source.getId();
 		source.getMbid();
 		source.getPlaycount();

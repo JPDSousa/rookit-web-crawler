@@ -3,7 +3,8 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>org.rookit</groupId>
 	<artifactId>rookit-web-crawler</artifactId>
-	<version>0.0.1-SNAPSHOT</version><build>
+	<version>0.0.1-SNAPSHOT</version>
+	<build>
 		<sourceDirectory>src/main/java</sourceDirectory>
 		<testSourceDirectory>src/test/java</testSourceDirectory>
 		<testResources>
@@ -59,12 +60,21 @@
 			<artifactId>rookit-data-model</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>de.u-mass</groupId>
+			<groupId>com.github.jkovacs</groupId>
 			<artifactId>lastfm-java</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>com.github.JPDSousa</groupId>
 			<artifactId>rookit-parser</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.github.JPDSousa</groupId>
+			<artifactId>rookit-parser</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<scope>test</scope>
 		</dependency>
 	</dependencies>
 	<dependencyManagement>
@@ -75,14 +85,24 @@
 				<version>-SNAPSHOT</version>
 			</dependency>
 			<dependency>
-				<groupId>de.u-mass</groupId>
+				<groupId>com.github.jkovacs</groupId>
 				<artifactId>lastfm-java</artifactId>
-				<version>0.1.2</version>
+				<version>acf212d1da</version>
 			</dependency>
 			<dependency>
 				<groupId>com.github.JPDSousa</groupId>
 				<artifactId>rookit-parser</artifactId>
 				<version>-SNAPSHOT</version>
+			</dependency>
+			<dependency>
+				<groupId>com.github.JPDSousa</groupId>
+				<artifactId>rookit-parser</artifactId>
+				<version>-SNAPSHOT</version>
+			</dependency>
+			<dependency>
+				<groupId>junit</groupId>
+				<artifactId>junit</artifactId>
+				<version>4.12</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>

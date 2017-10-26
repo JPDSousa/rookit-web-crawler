@@ -7,6 +7,7 @@ public class LastFMConfig {
 	
 	private String apiKey;
 	private String user;
+	private int levenshteinThreshold;
 	
 	public String getApiKey() {
 		return getOrDefault(apiKey, "4c0824b3aa2f1114eee0ca8259512071");
@@ -19,6 +20,12 @@ public class LastFMConfig {
 	}
 	public void setUser(String user) {
 		this.user = user;
+	}
+	public int getLevenshteinThreshold() {
+		return getOrDefault(levenshteinThreshold, 8);
+	}
+	public void setLevenshteinThreshold(int levenshteinThreshold) {
+		this.levenshteinThreshold = levenshteinThreshold;
 	}
 	
 	

@@ -8,6 +8,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Date;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -60,6 +61,7 @@ class LastFM implements MusicService {
 		distance = LevenshteinDistance.getDefaultInstance();
 		final Caller caller = Caller.getInstance();
 		caller.setUserAgent("tst");
+		caller.getLogger().setUseParentHandlers(config.isDebug());
 		this.artistFactory = ArtistFactory.getDefault();
 		this.albumFactory = AlbumFactory.getDefault();
 		parser = createParser();
@@ -111,10 +113,10 @@ class LastFM implements MusicService {
 
 	private byte[] getBiggest(MusicEntry source) {
 		final ImageSize biggest = source.availableSizes().parallelStream()
-				.reduce(this::compare)
+				.reduce((left, right) -> compare(left, right, source))
 				.get();
 		try {
-			if(biggest != null) {
+			if(biggest != null && !source.getImageURL(biggest).isEmpty()) {
 				final URL url = new URL(source.getImageURL(biggest));
 				return IOUtils.toByteArray(url.openStream());
 			}
@@ -124,7 +126,15 @@ class LastFM implements MusicService {
 		}
 	}
 
-	private ImageSize compare(ImageSize left, ImageSize right) {
+	private ImageSize compare(ImageSize left, ImageSize right, MusicEntry source) {
+		final String urlLeft = source.getImageURL(left);
+		final String urlRight = source.getImageURL(right);
+		if(urlLeft == null || urlLeft.isEmpty()) {
+			return right;
+		}
+		if(urlRight == null || urlRight.isEmpty()) {
+			return left;
+		}
 		return left.compareTo(right) > 0 ? left : right;
 	}
 
@@ -165,7 +175,24 @@ class LastFM implements MusicService {
 				.map(Artist::getName)
 				.collect(Collectors.toList());
 		final String name = bestMatch(names, originalName);
-		return name != null ? artistFactory.createArtist(TypeArtist.GROUP, name) : null;
+		if(name != null) {
+			final Artist artist = artistFactory.createArtist(TypeArtist.GROUP, name);
+			final byte[] cover = getBiggest(source);
+			final int plays = source.getPlaycount();
+			if(cover != null) {
+				artist.setPicture(cover);
+			}
+			if(plays > 0) {
+				artist.setPlays(plays);
+			}
+			// TODO add these fields
+			source.getId();
+			source.getListeners();
+			source.getMbid();
+			source.getSimilarityMatch();
+			return artist;
+		}
+		return null;
 	}
 
 	private String bestMatch(List<String> search, String str) {
@@ -206,15 +233,28 @@ class LastFM implements MusicService {
 		final Pair<TypeRelease, String> albumMeta = TypeRelease.parseAlbumName(source.getName(), TypeRelease.STUDIO);
 		final Set<Artist> artists = artistFactory.getArtistsFromFormat(source.getArtist());
 		final Album album = albumFactory.createSingleArtistAlbum(albumMeta.getRight(), albumMeta.getLeft(), artists);
-		album.setCover(getBiggest(source));
-		final LocalDate releaseDate = source.getReleaseDate().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-		album.setReleaseDate(releaseDate);
-		source.getTracks().forEach(track -> album.addTrack(toTrack(track), track.getPosition()));
+		final byte[] cover = getBiggest(source);
+		if(cover != null) {
+			album.setCover(cover);
+		}
+		final LocalDate releaseDate = getReleaseDate(source);
+		if(releaseDate != null) {
+			album.setReleaseDate(releaseDate);
+		}
+		final Collection<de.umass.lastfm.Track> tracks = source.getTracks();
+		if(tracks != null) {
+			tracks.forEach(track -> album.addTrack(toTrack(track), track.getPosition()));
+		}
 		//TODO add these fields
 		source.getId();
 		source.getMbid();
 		source.getPlaycount();
 		return album;
+	}
+
+	private LocalDate getReleaseDate(de.umass.lastfm.Album source) {
+		final Date releaseDate = source.getReleaseDate();
+		return releaseDate != null ? releaseDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate() : null;
 	}
 
 	@Override
@@ -235,19 +275,7 @@ class LastFM implements MusicService {
 	public Stream<Artist> searchRelatedArtists(Artist artist) {
 		return de.umass.lastfm.Artist.getSimilar(artist.getName(), apiKey)
 				.parallelStream()
-				.map(this::toArtist);
-	}
-
-	private Artist toArtist(de.umass.lastfm.Artist source) {
-		final Artist artist = artistFactory.createArtist(TypeArtist.GROUP, source.getName());
-		artist.setPicture(getBiggest(source));
-		artist.setPlays(source.getPlaycount());
-		// TODO add these fields
-		source.getId();
-		source.getListeners();
-		source.getMbid();
-		source.getSimilarityMatch();
-		return artist;
+				.map(a -> toArtist(a, artist.getName()));
 	}
 
 	@Override

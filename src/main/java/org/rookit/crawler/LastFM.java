@@ -12,6 +12,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -37,6 +38,8 @@ import org.rookit.parser.parser.Parser;
 import org.rookit.parser.parser.ParserFactory;
 import org.rookit.parser.result.SingleTrackAlbumBuilder;
 
+import com.google.common.util.concurrent.RateLimiter;
+
 import de.umass.lastfm.Caller;
 import de.umass.lastfm.ImageSize;
 import de.umass.lastfm.MusicEntry;
@@ -53,8 +56,10 @@ class LastFM implements MusicService {
 	private final AlbumFactory albumFactory;
 	private final Parser<String, SingleTrackAlbumBuilder> parser;
 	private final LevenshteinDistance distance;
+	private final RateLimiter limiter;
 
 	LastFM(LastFMConfig config) {
+		limiter = RateLimiter.create(5);
 		this.config = config;
 		this.apiKey = config.getApiKey();
 		this.user = config.getUser();
@@ -65,6 +70,15 @@ class LastFM implements MusicService {
 		this.artistFactory = ArtistFactory.getDefault();
 		this.albumFactory = AlbumFactory.getDefault();
 		parser = createParser();
+	}
+	
+	private <T> T schedule(Callable<T> executor) {
+		limiter.acquire();
+		try {
+			return executor.call();
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
 	}
 
 	private Parser<String, SingleTrackAlbumBuilder> createParser() {
@@ -86,7 +100,7 @@ class LastFM implements MusicService {
 		final String trackTitle = track.getTitle().toString();
 		return StreamSupport.stream(track.getMainArtists().spliterator(), true)
 				.map(Artist::getName)
-				.map(name -> de.umass.lastfm.Track.search(name, trackTitle, 200, apiKey))
+				.map(name -> schedule(() -> de.umass.lastfm.Track.search(name, trackTitle, 200, apiKey)))
 				.flatMap(Collection::parallelStream)
 				.map(this::toTrack)
 				.filter(Objects::nonNull);
@@ -140,10 +154,10 @@ class LastFM implements MusicService {
 
 	@Override
 	public Stream<Track> searchArtistTracks(Artist artist) {
-		final Stream<Track> topTracks = de.umass.lastfm.Artist.getTopTracks(artist.getName(), apiKey)
+		final Stream<Track> topTracks = schedule(() -> de.umass.lastfm.Artist.getTopTracks(artist.getName(), apiKey))
 				.parallelStream()
 				.map(this::toTrack);
-		final Stream<Track> allTracks = de.umass.lastfm.Artist.search(artist.getName(), apiKey)
+		final Stream<Track> allTracks = schedule(() -> de.umass.lastfm.Artist.search(artist.getName(), apiKey))
 				.parallelStream()
 				.map(de.umass.lastfm.Artist::getName)
 				.flatMap(this::searchArtistTracks)
@@ -153,9 +167,9 @@ class LastFM implements MusicService {
 	}
 
 	private Stream<de.umass.lastfm.Track> searchArtistTracks(String artistName) {
-		final PaginatedResult<de.umass.lastfm.Track> firstResults = User.getArtistTracks(user, artistName, apiKey);
+		final PaginatedResult<de.umass.lastfm.Track> firstResults = schedule(() -> User.getArtistTracks(user, artistName, apiKey));
 		final Stream<de.umass.lastfm.Track> otherResults = IntStream.range(1, firstResults.getTotalPages())
-				.mapToObj(i -> User.getArtistTracks(user, artistName, i, 0, 0, apiKey))
+				.mapToObj(i -> schedule(() -> User.getArtistTracks(user, artistName, i, 0, 0, apiKey)))
 				.map(PaginatedResult::getPageResults)
 				.flatMap(Collection::parallelStream);
 		return Stream.concat(firstResults.getPageResults().parallelStream(), otherResults)
@@ -164,7 +178,7 @@ class LastFM implements MusicService {
 
 	@Override
 	public Stream<Artist> searchArtist(Artist artist) {
-		return de.umass.lastfm.Artist.search(artist.getName(), apiKey).parallelStream()
+		return schedule(() -> de.umass.lastfm.Artist.search(artist.getName(), apiKey)).parallelStream()
 				.map(artistRes -> toArtist(artistRes, artist.getName()))
 				.filter(Objects::nonNull);
 	}
@@ -223,7 +237,7 @@ class LastFM implements MusicService {
 
 	@Override
 	public Stream<Album> searchAlbum(Album album) {
-		return de.umass.lastfm.Album.search(album.getTitle(), apiKey)
+		return schedule(() -> de.umass.lastfm.Album.search(album.getTitle(), apiKey))
 				.parallelStream()
 				.map(this::toAlbum)
 				.filter(Objects::nonNull);
@@ -266,7 +280,7 @@ class LastFM implements MusicService {
 	public Stream<Track> searchRelatedTracks(Track track) {
 		return StreamSupport.stream(track.getMainArtists().spliterator(), true)
 				.map(Artist::getName)
-				.map(artistName -> de.umass.lastfm.Track.getSimilar(artistName, track.getTitle().toString(), apiKey))
+				.map(artistName -> schedule(() -> de.umass.lastfm.Track.getSimilar(artistName, track.getTitle().toString(), apiKey)))
 				.flatMap(Collection::parallelStream)
 				.map(this::toTrack);
 	}

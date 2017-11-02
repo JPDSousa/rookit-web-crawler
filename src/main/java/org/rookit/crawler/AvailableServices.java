@@ -3,6 +3,8 @@ package org.rookit.crawler;
 @SuppressWarnings("javadoc")
 public enum AvailableServices {
 	
-	LASTFM();
+	LASTFM,
+	SPOTIFY,
+	MBRAINZ;
 
 }

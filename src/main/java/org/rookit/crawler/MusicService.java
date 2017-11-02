@@ -10,6 +10,18 @@ import org.rookit.dm.track.Track;
 @SuppressWarnings("javadoc")
 public interface MusicService {
 	
+	String ID = "id";
+	String LISTENERS = "listeners";
+	String POPULARITY = "popularity";
+	String MARKETS = "markets";
+	String URL = "url";
+	String URI = "uri";
+	String PREVIEW = "preview";
+	String LOCATION = "location";
+	String TAGS = "tags";
+	String WIKI = "wiki";
+	String PLAYS = "plays";
+	
 	Stream<Track> searchTrack(Track track);
 	Stream<Track> searchArtistTracks(Artist artist);
 	Stream<Track> searchRelatedTracks(Track track);

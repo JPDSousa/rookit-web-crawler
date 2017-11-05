@@ -1,16 +1,15 @@
 package org.rookit.crawler;
 
-import java.io.IOException;
-import java.net.URL;
-import java.nio.file.Paths;
+import static org.rookit.crawler.AvailableServices.*;
+
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
-import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
@@ -18,27 +17,16 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang3.tuple.Pair;
-import org.apache.commons.text.similarity.LevenshteinDistance;
+import org.bson.Document;
 import org.rookit.crawler.config.LastFMConfig;
+import org.rookit.crawler.utils.CrawlerIOUtils;
 import org.rookit.dm.album.Album;
-import org.rookit.dm.album.AlbumFactory;
-import org.rookit.dm.album.TypeRelease;
 import org.rookit.dm.artist.Artist;
-import org.rookit.dm.artist.ArtistFactory;
-import org.rookit.dm.artist.TypeArtist;
 import org.rookit.dm.genre.Genre;
 import org.rookit.dm.track.Track;
-import org.rookit.parser.config.ParserConfiguration;
-import org.rookit.parser.config.ParsingConfig;
-import org.rookit.parser.formatlist.FormatList;
-import org.rookit.parser.parser.Field;
-import org.rookit.parser.parser.Parser;
-import org.rookit.parser.parser.ParserFactory;
 import org.rookit.parser.result.SingleTrackAlbumBuilder;
 
-import com.google.common.util.concurrent.RateLimiter;
+import com.google.common.collect.Maps;
 
 import de.umass.lastfm.Caller;
 import de.umass.lastfm.ImageSize;
@@ -46,30 +34,18 @@ import de.umass.lastfm.MusicEntry;
 import de.umass.lastfm.PaginatedResult;
 import de.umass.lastfm.User;
 
-class LastFM implements MusicService {
+class LastFM extends AbstractMusicService {
 
 	private final String apiKey;
 	private final String user;
-	private final LastFMConfig config;
-
-	private final ArtistFactory artistFactory;
-	private final AlbumFactory albumFactory;
-	private final Parser<String, SingleTrackAlbumBuilder> parser;
-	private final LevenshteinDistance distance;
-	private final RateLimiter limiter;
 
 	LastFM(LastFMConfig config) {
-		limiter = RateLimiter.create(5);
-		this.config = config;
+		super(5, config.getLevenshteinThreshold());
 		this.apiKey = config.getApiKey();
 		this.user = config.getUser();
-		distance = LevenshteinDistance.getDefaultInstance();
 		final Caller caller = Caller.getInstance();
 		caller.setUserAgent("tst");
 		caller.getLogger().setUseParentHandlers(config.isDebug());
-		this.artistFactory = ArtistFactory.getDefault();
-		this.albumFactory = AlbumFactory.getDefault();
-		parser = createParser();
 	}
 	
 	private <T> T schedule(Callable<T> executor) {
@@ -77,20 +53,6 @@ class LastFM implements MusicService {
 		try {
 			return executor.call();
 		} catch (Exception e) {
-			throw new RuntimeException(e);
-		}
-	}
-
-	private Parser<String, SingleTrackAlbumBuilder> createParser() {
-		try {
-			FormatList formats = FormatList.readFromPath(Paths.get("src", "main", "resources", "parser", "formats.txt"));
-			final ParserFactory factory = ParserFactory.create();
-			final ParsingConfig topConfig = new ParsingConfig();
-			final ParserConfiguration config = ParserConfiguration.create(SingleTrackAlbumBuilder.class, topConfig);
-			config.withRequiredFields(new Field[0]);
-			config.withTrackFormats(formats.getAll().collect(Collectors.toList()));
-			return factory.newFormatParser(config);
-		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
 	}
@@ -115,10 +77,20 @@ class LastFM implements MusicService {
 	}
 
 	private Track toTrack(de.umass.lastfm.Track source) {
+		final Set<Artist> artists = toArtists(source);
+		final Document mBrainz = new Document(ID, source.getMbid());
+		final Document lastFM = new Document(ID, source.getId())
+				.append(LISTENERS, source.getListeners())
+				.append(LOCATION, source.getLocation())
+				.append(URL, source.getUrl())
+				.append(TAGS, source.getTags())
+				.append(WIKI, source.getWikiSummary())
+				.append(PLAYS, source.getPlaycount());
 		final SingleTrackAlbumBuilder builder = parseTrackTitle(source)
-				//.withCover(getBiggest(source))
-				//.withAlbumTitle(source.getAlbum()) TODO parse album title
-				.withMainArtists(artistFactory.getArtistsFromFormat(source.getArtist()))
+				.withAlbum(toAlbum(source, artists))
+				.withMainArtists(artists)
+				.withExternalMetadata(MBRAINZ.name(), mBrainz)
+				.withExternalMetadata(LASTFM.name(), lastFM)
 				.withDuration(Duration.ofSeconds(source.getDuration()));
 		final Track track = builder.getTrack();
 		final long plays = source.getPlaycount();
@@ -133,6 +105,16 @@ class LastFM implements MusicService {
 		setMBid(source.getArtistMbid(), artists);
 		return artists;
 	}
+
+	private void setMBid(String id, final Set<Artist> artists) {
+		if(artists.size() == 1) {
+			final Document mBrainz = new Document(ID, id);
+			//get single artist
+			for(Artist artist : artists) {
+				artist.putExternalMetadata(MBRAINZ.name(), mBrainz);
+			}
+		}
+	}
 	
 	private Album toAlbum(de.umass.lastfm.Track track, Set<Artist> artists) {
 		final Album album = albumFactory.createSingleArtistAlbum(track.getAlbum(), artists);
@@ -145,6 +127,7 @@ class LastFM implements MusicService {
 
 	private SingleTrackAlbumBuilder parseTrackTitle(de.umass.lastfm.Track source) {
 		final SingleTrackAlbumBuilder result = parser.parse(source.getName());
+		// TODO set score in else clause
 		return result.getScore() > 0 ? result : SingleTrackAlbumBuilder.create().withTitle(source.getName());
 	}
 
@@ -152,15 +135,10 @@ class LastFM implements MusicService {
 		final ImageSize biggest = source.availableSizes().parallelStream()
 				.reduce((left, right) -> compare(left, right, source))
 				.get();
-		try {
-			if(biggest != null && !source.getImageURL(biggest).isEmpty()) {
-				final URL url = new URL(source.getImageURL(biggest));
-				return IOUtils.toByteArray(url.openStream());
-			}
-			return null;
-		} catch (IOException e) {
-			throw new RuntimeException(e);
+		if(biggest != null && !source.getImageURL(biggest).isEmpty()) {
+			return CrawlerIOUtils.downloadImage(source.getImageURL(biggest));
 		}
+		return null;
 	}
 
 	private ImageSize compare(ImageSize left, ImageSize right, MusicEntry source) {
@@ -208,54 +186,40 @@ class LastFM implements MusicService {
 
 	private Artist toArtist(de.umass.lastfm.Artist source, String originalName) {
 		final Set<Artist> artists = artistFactory.getArtistsFromFormat(source.getName());
-		final List<String> names = artists.stream()
-				.map(Artist::getName)
-				.collect(Collectors.toList());
-		final String name = bestMatch(names, originalName);
-		if(name != null) {
-			final Artist artist = artistFactory.createArtist(TypeArtist.GROUP, name);
+		final Artist artist = bestMatchArtist(artists, originalName);
+		if(artist != null) {
 			final byte[] cover = getBiggest(source);
-			final int plays = source.getPlaycount();
+			final Document lastFM = new Document(ID, source.getId())
+					.append(LISTENERS, source.getListeners())
+					.append(TAGS, source.getTags())
+					.append(URL, source.getUrl())
+					.append(WIKI, source.getWikiSummary())
+					.append(PLAYS, source.getPlaycount());
+			artist.putExternalMetadata(LASTFM.name(), lastFM);
+			// only sets the mbid if artists = artist
+			setMBid(source.getMbid(), artists);
 			if(cover != null) {
 				artist.setPicture(cover);
 			}
-			if(plays > 0) {
-				artist.setPlays(plays);
-			}
-			// TODO add these fields
-			source.getId();
-			source.getListeners();
-			source.getMbid();
-			source.getSimilarityMatch();
 			return artist;
 		}
 		return null;
 	}
-
-	private String bestMatch(List<String> search, String str) {
-		if(search.isEmpty()) {
-			return null;
+	
+	private Artist bestMatchArtist(Collection<Artist> artists, String originalName) {
+		final Map<String, Artist> names = artists.stream()
+				.collect(Collectors.groupingBy(
+						Artist::getName, 
+						Maps::newLinkedHashMap, 
+						Collectors.collectingAndThen(
+								Collectors.reducing((left, right) -> left), 
+								Optional::get)));
+		
+		final String name = bestMatch(names.keySet(), originalName);
+		if(name != null) {
+			return names.get(name);
 		}
-		final String lowerString = str.toLowerCase();
-		return search.parallelStream()
-				.map(String::toLowerCase)
-				.filter(searchStr -> !containsAny(searchStr, Artist.SUSPICIOUS_NAME_CHARSEQS))
-				.map(searchStr -> Pair.of(searchStr, distance.apply(searchStr, lowerString)))
-				.filter(pair -> pair.getRight() >= 0)
-				.filter(pair -> pair.getRight() < config.getLevenshteinThreshold())
-				.reduce(this::compare)
-				.map(Pair::getLeft)
-				.orElse(null);
-	}
-
-	private boolean containsAny(String searchStr, String[] strs) {
-		return Arrays.stream(strs).anyMatch(str -> searchStr.contains(str));
-	}
-
-	private Pair<String, Integer> compare(Pair<String, Integer> left, Pair<String, Integer> right) {
-		final int leftScore = left.getRight();
-		final int rigthScore = right.getRight();
-		return leftScore < rigthScore ? left : right;
+		return null;
 	}
 
 	@Override
@@ -267,9 +231,17 @@ class LastFM implements MusicService {
 	}
 
 	private Album toAlbum(de.umass.lastfm.Album source) {
-		final Pair<TypeRelease, String> albumMeta = TypeRelease.parseAlbumName(source.getName(), TypeRelease.STUDIO);
 		final Set<Artist> artists = artistFactory.getArtistsFromFormat(source.getArtist());
-		final Album album = albumFactory.createSingleArtistAlbum(albumMeta.getRight(), albumMeta.getLeft(), artists);
+		final Album album = albumFactory.createSingleArtistAlbum(source.getName(), artists);
+		final Document mBrainz = new Document(ID, source.getMbid());
+		final Document lastFM = new Document(ID, source.getId())
+				.append(PLAYS, source.getPlaycount())
+				.append(LISTENERS, source.getListeners())
+				.append(TAGS, source.getTags())
+				.append(URL, source.getUrl())
+				.append(WIKI, source.getWikiSummary());
+		album.putExternalMetadata(MBRAINZ.name(), mBrainz);
+		album.putExternalMetadata(LASTFM.name(), lastFM);
 		final byte[] cover = getBiggest(source);
 		if(cover != null) {
 			album.setCover(cover);
@@ -286,6 +258,10 @@ class LastFM implements MusicService {
 		source.getId();
 		source.getMbid();
 		source.getPlaycount();
+		source.getListeners();
+		source.getTags();
+		source.getUrl();
+		source.getWikiSummary();
 		return album;
 	}
 

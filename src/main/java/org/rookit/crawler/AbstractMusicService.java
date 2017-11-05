@@ -1,17 +1,13 @@
 package org.rookit.crawler;
 
-import static org.rookit.crawler.AvailableServices.MBRAINZ;
-
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.commons.text.similarity.LevenshteinDistance;
-import org.bson.Document;
 import org.rookit.dm.album.AlbumFactory;
 import org.rookit.dm.artist.Artist;
 import org.rookit.dm.artist.ArtistFactory;
@@ -62,16 +58,6 @@ abstract class AbstractMusicService implements MusicService {
 			return factory.newFormatParser(config);
 		} catch (IOException e) {
 			throw new RuntimeException(e);
-		}
-	}
-	
-	protected void setMBid(String id, final Set<Artist> artists) {
-		if(artists.size() == 1) {
-			final Document mBrainz = new Document(ID, id);
-			//get single artist
-			for(Artist artist : artists) {
-				artist.putExternalMetadata(MBRAINZ.name(), mBrainz);
-			}
 		}
 	}
 	

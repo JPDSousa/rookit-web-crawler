@@ -68,7 +68,6 @@ class Spotify extends AbstractMusicService {
 		// TODO add these fields
 		source.getExternalIds();
 		source.getExternalUrls();
-		source.getAlbum();
 		final Document spotify = new Document(ID, source.getId())
 				.append(POPULARITY, source.getPopularity())
 				.append(MARKETS, source.getAvailableMarkets())

@@ -97,12 +97,20 @@ class LastFM implements MusicService {
 
 	@Override
 	public Stream<Track> searchTrack(Track track) {
-		final String trackTitle = track.getTitle().toString();
-		return StreamSupport.stream(track.getMainArtists().spliterator(), true)
-				.map(Artist::getName)
-				.map(name -> schedule(() -> de.umass.lastfm.Track.search(name, trackTitle, 200, apiKey)))
-				.flatMap(Collection::parallelStream)
-				.map(this::toTrack)
+		final Document mBrainz = track.getExternalMetadata(MBRAINZ.name());
+		final Stream<de.umass.lastfm.Track> rawStream;
+		if(mBrainz != null && mBrainz.getString(ID) != null) {
+			final String id = mBrainz.getString(ID);
+			rawStream = Stream.of(schedule(() -> de.umass.lastfm.Track.getInfo(null, id, apiKey)));
+		}
+		else {
+			final String trackTitle = track.getTitle().toString();
+			rawStream = StreamSupport.stream(track.getMainArtists().spliterator(), true)
+					.map(Artist::getName)
+					.map(name -> schedule(() -> de.umass.lastfm.Track.search(name, trackTitle, 200, apiKey)))
+					.flatMap(Collection::parallelStream); 
+		}
+		return rawStream.map(this::toTrack)
 				.filter(Objects::nonNull);
 	}
 
@@ -118,6 +126,21 @@ class LastFM implements MusicService {
 			track.setPlays(plays);
 		}
 		return track;
+	}
+
+	private Set<Artist> toArtists(de.umass.lastfm.Track source) {
+		final Set<Artist> artists = artistFactory.getArtistsFromFormat(source.getArtist());
+		setMBid(source.getArtistMbid(), artists);
+		return artists;
+	}
+	
+	private Album toAlbum(de.umass.lastfm.Track track, Set<Artist> artists) {
+		final Album album = albumFactory.createSingleArtistAlbum(track.getAlbum(), artists);
+		final Document mBrainz = new Document(ID, track.getAlbumMbid());
+		album.setCover(getBiggest(track));
+		album.putExternalMetadata(MBRAINZ.name(), mBrainz);
+		
+		return album;
 	}
 
 	private SingleTrackAlbumBuilder parseTrackTitle(de.umass.lastfm.Track source) {

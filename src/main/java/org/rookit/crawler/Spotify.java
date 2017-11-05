@@ -11,6 +11,7 @@ import java.util.stream.Stream;
 
 import org.apache.commons.lang3.tuple.Pair;
 import org.bson.Document;
+import org.rookit.crawler.factory.SpotifyFactory;
 import org.rookit.crawler.utils.CrawlerIOUtils;
 import org.rookit.crawler.utils.spotify.PageSupplier;
 import org.rookit.dm.album.Album;
@@ -32,10 +33,12 @@ class Spotify extends AbstractMusicService {
 	
 	private final Api api;
 	private final int limit;
+	private final SpotifyFactory factory;
 	
 	public Spotify() {
 		super(20);
 		// TODO add config
+		factory = new SpotifyFactory();
 		limit = 30;
 		api = Api.builder()
 				.clientId("366eacf6d13f424aa64f3138def16062")
@@ -53,7 +56,7 @@ class Spotify extends AbstractMusicService {
 		return Stream.generate(new PageSupplier<>(limit, offset -> searchByTitle(limit, offset, title)))
 				.map(Page::getItems)
 				.flatMap(Collection::parallelStream)
-				.map(this::toTrack);
+				.map(factory::toTrack);
 	}
 	
 	private Page<com.wrapper.spotify.models.Track> searchByTitle(int limit, int offset, String title) {
@@ -63,64 +66,6 @@ class Spotify extends AbstractMusicService {
 			throw new RuntimeException(e);
 		}
 	}
-	
-	private Track toTrack(com.wrapper.spotify.models.Track source) {
-		// TODO add these fields
-		source.getExternalIds();
-		source.getExternalUrls();
-		final Document spotify = new Document(ID, source.getId())
-				.append(POPULARITY, source.getPopularity())
-				.append(MARKETS, source.getAvailableMarkets())
-				.append(URL, source.getHref())
-				.append(PREVIEW, source.getPreviewUrl())
-				.append(URI, source.getUri());
-		final Set<Artist> artists = toArtists(source.getArtists());
-		return parser.parse(source.getName())
-				.withMainArtists(artists)
-				.withAlbum(toAlbum(source.getAlbum(), artists))
-				.withDisc(source.getDiscNumber()+"")
-				.withNumber(source.getTrackNumber())
-				.withDuration(Duration.ofMillis(source.getDuration()))
-				.withExplicit(source.isExplicit())
-				.withExternalMetadata(SPOTIFY.name(), spotify)
-				.getTrack();
-	}
-
-	private Album toAlbum(SimpleAlbum source, Set<Artist> artists) {
-		final Pair<TypeRelease, String> pair = TypeRelease.parseAlbumName(source.getName(), toTypeRelease(source.getAlbumType()));
-		final Album album = albumFactory.createSingleArtistAlbum(pair.getRight(), pair.getLeft(), artists);
-		final Document spotify = new Document(ID, source.getId())
-				.append(MARKETS, source.getAvailableMarkets())
-				.append(URL, source.getHref())
-				.append(URI, source.getUri());
-		// TODO handle these fields
-		source.getExternalUrls();
-		album.setCover(biggest(source.getImages()));
-		album.putExternalMetadata(SPOTIFY.name(), spotify);
-		return album;
-	}
-
-	private TypeRelease toTypeRelease(AlbumType albumType) {
-		switch(albumType) {
-		case ALBUM:
-			return TypeRelease.STUDIO;
-		case COMPILATION:
-			return TypeRelease.COMPILATION;
-		case SINGLE:
-			return TypeRelease.SINGLE;
-		}
-		return null;
-	}
-
-	private Set<Artist> toArtists(List<SimpleArtist> source) {
-		final Set<Artist> artists = Sets.newLinkedHashSetWithExpectedSize(source.size());
-		for(SimpleArtist artist : source) {
-			artists.addAll(artistFactory.getArtistsFromFormat(artist.getName()));
-			// TODO add these fields
-			artist.getId();
-		}
-		return artists;
-	}
 
 	@Override
 	public Stream<Track> searchArtistTracks(Artist artist) {
@@ -128,7 +73,7 @@ class Spotify extends AbstractMusicService {
 		return Stream.generate(new PageSupplier<>(limit, offset -> searchByTitle(limit, offset, query)))
 				.map(Page::getItems)
 				.flatMap(Collection::parallelStream)
-				.map(this::toTrack);
+				.map(factory::toTrack);
 	}
 
 	@Override
@@ -137,7 +82,7 @@ class Spotify extends AbstractMusicService {
 		return Stream.generate(new PageSupplier<>(limit, offset -> searchByTitle(limit, offset, query)))
 				.map(Page::getItems)
 				.flatMap(Collection::parallelStream)
-				.map(this::toTrack);
+				.map(factory::toTrack);
 	}
 
 	@Override
@@ -146,43 +91,9 @@ class Spotify extends AbstractMusicService {
 		return Stream.generate(new PageSupplier<>(limit, offset -> searchByArtist(limit, offset, query)))
 				.map(Page::getItems)
 				.flatMap(Collection::parallelStream)
-				.map(this::toArtists)
-				.flatMap(Collection::parallelStream);
+				.map(a -> factory.toArtist(a, query));
 	}
 	
-	private Set<Artist> toArtists(com.wrapper.spotify.models.Artist source) {
-		final Set<Artist> artists = artistFactory.getArtistsFromFormat(source.getName());
-		final Set<Genre> genres = Sets.newLinkedHashSetWithExpectedSize(source.getGenres().size());
-		for(String genreName : source.getGenres()) {
-			genres.add(genreFactory.createGenre(genreName));
-		}
-		for(Artist artist : artists) {
-			artist.setGenres(Sets.newLinkedHashSet(genres));
-			artist.setPicture(biggest(source.getImages()));
-			source.getFollowers();
-			source.getId();
-			source.getImages();
-			source.getPopularity();
-		}
-		return artists;
-	}
-	
-	private byte[] biggest(List<Image> images) {
-		final Image biggest = images.stream()
-				.reduce(this::compare)
-				.get();
-		if(biggest != null) {
-			return CrawlerIOUtils.downloadImage(biggest.getUrl());
-		}
-		return null;
-	}
-	
-	private Image compare(Image left, Image right) {
-		final int dimLeft = left.getHeight()*left.getWidth();
-		final int dimRight = right.getHeight()*right.getWidth();
-		return dimLeft > dimRight ? left : right;
-	}
-
 	private Page<com.wrapper.spotify.models.Artist> searchByArtist(int limit, int offset, String query) {
 		try {
 			return api.searchArtists(encode(query)).limit(limit).offset(offset).build().get();

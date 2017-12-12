@@ -56,24 +56,8 @@
 	</repositories>
 	<dependencies>
 		<dependency>
-			<groupId>com.github.JPDSousa</groupId>
-			<artifactId>rookit-data-model</artifactId>
-		</dependency>
-		<dependency>
 			<groupId>com.github.jkovacs</groupId>
 			<artifactId>lastfm-java</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>com.github.JPDSousa</groupId>
-			<artifactId>rookit-parser</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>com.github.JPDSousa</groupId>
-			<artifactId>rookit-parser</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>se.michaelthelin.spotify</groupId>
-			<artifactId>spotify-web-api-java</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>junit</groupId>
@@ -85,28 +69,57 @@
 			<artifactId>hamcrest-all</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<dependency>
+			<groupId>io.reactivex.rxjava2</groupId>
+			<artifactId>rxjava</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.mockito</groupId>
+			<artifactId>mockito-all</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.mapdb</groupId>
+			<artifactId>mapdb</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.mongodb</groupId>
+			<artifactId>bson</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-text</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-lang3</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>commons-io</groupId>
+			<artifactId>commons-io</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.github.JPDSousa</groupId>
+			<artifactId>rookit-data-model</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.github.JPDSousa</groupId>
+			<artifactId>rookit-utils</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.github.JPDSousa</groupId>
+			<artifactId>rookit-parser</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.github.JPDSousa</groupId>
+			<artifactId>spotify-web-api-java</artifactId>
+		</dependency>
 	</dependencies>
 	<dependencyManagement>
 		<dependencies>
 			<dependency>
-				<groupId>com.github.JPDSousa</groupId>
-				<artifactId>rookit-data-model</artifactId>
-				<version>-SNAPSHOT</version>
-			</dependency>
-			<dependency>
 				<groupId>com.github.jkovacs</groupId>
 				<artifactId>lastfm-java</artifactId>
 				<version>acf212d1da</version>
-			</dependency>
-			<dependency>
-				<groupId>com.github.JPDSousa</groupId>
-				<artifactId>rookit-parser</artifactId>
-				<version>-SNAPSHOT</version>
-			</dependency>
-			<dependency>
-				<groupId>com.github.JPDSousa</groupId>
-				<artifactId>rookit-parser</artifactId>
-				<version>-SNAPSHOT</version>
 			</dependency>
 			<dependency>
 				<groupId>junit</groupId>
@@ -121,9 +134,59 @@
 				<scope>test</scope>
 			</dependency>
 			<dependency>
-				<groupId>se.michaelthelin.spotify</groupId>
+				<groupId>io.reactivex.rxjava2</groupId>
+				<artifactId>rxjava</artifactId>
+				<version>2.1.6</version>
+			</dependency>
+			<dependency>
+				<groupId>org.mockito</groupId>
+				<artifactId>mockito-all</artifactId>
+				<version>1.10.19</version>
+			</dependency>
+			<dependency>
+				<groupId>org.mapdb</groupId>
+				<artifactId>mapdb</artifactId>
+				<version>3.0.5</version>
+			</dependency>
+			<dependency>
+				<groupId>org.mongodb</groupId>
+				<artifactId>bson</artifactId>
+				<version>3.3.0</version>
+			</dependency>
+			<dependency>
+				<groupId>org.apache.commons</groupId>
+				<artifactId>commons-text</artifactId>
+				<version>1.1</version>
+			</dependency>
+			<dependency>
+				<groupId>org.apache.commons</groupId>
+				<artifactId>commons-lang3</artifactId>
+				<version>3.6</version>
+			</dependency>
+			<dependency>
+				<groupId>commons-io</groupId>
+				<artifactId>commons-io</artifactId>
+				<version>2.5</version>
+			</dependency>
+			<dependency>
+				<groupId>com.github.JPDSousa</groupId>
+				<artifactId>rookit-data-model</artifactId>
+				<version>master-SNAPSHOT</version>
+			</dependency>
+			<dependency>
+				<groupId>com.github.JPDSousa</groupId>
+				<artifactId>rookit-utils</artifactId>
+				<version>master-SNAPSHOT</version>
+			</dependency>
+			<dependency>
+				<groupId>com.github.JPDSousa</groupId>
+				<artifactId>rookit-parser</artifactId>
+				<version>master-SNAPSHOT</version>
+			</dependency>
+			<dependency>
+				<groupId>com.github.JPDSousa</groupId>
 				<artifactId>spotify-web-api-java</artifactId>
-				<version>1.5.0</version>
+				<version>master-SNAPSHOT</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>

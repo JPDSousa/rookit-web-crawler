@@ -22,3 +22,5 @@ hs_err_pid*
 apis/
 
 crawler/cache
+
+src/test/resources/client/

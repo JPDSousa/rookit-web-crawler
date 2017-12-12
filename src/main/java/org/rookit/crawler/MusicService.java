@@ -1,11 +1,11 @@
 package org.rookit.crawler;
 
-import java.util.stream.Stream;
-
 import org.rookit.dm.album.Album;
 import org.rookit.dm.artist.Artist;
 import org.rookit.dm.genre.Genre;
 import org.rookit.dm.track.Track;
+
+import io.reactivex.Observable;
 
 @SuppressWarnings("javadoc")
 public interface MusicService {
@@ -22,16 +22,23 @@ public interface MusicService {
 	String WIKI = "wiki";
 	String PLAYS = "plays";
 	
-	Stream<Track> searchTrack(Track track);
-	Stream<Track> searchArtistTracks(Artist artist);
-	Stream<Track> searchRelatedTracks(Track track);
+	String getName();
 	
-	Stream<Artist> searchArtist(Artist artist);
-	Stream<Artist> searchRelatedArtists(Artist artist);
+	Observable<Track> searchTrack(Track track);
+	Observable<Track> getArtistTracks(Artist artist);
 	
-	Stream<Album> searchAlbum(Album album);
+	Observable<Artist> searchArtist(Artist artist);
+	Observable<Artist> searchRelatedArtists(Artist artist);
 	
-	Stream<Genre> searchGenre(Genre genre);
-	Stream<Genre> searchRelatedGenres(Genre genre);
+	Observable<Album> searchAlbum(Album album);
+	
+	Observable<Genre> searchGenre(Genre genre);
+	Observable<Genre> searchRelatedGenres(Genre genre);
+	
+	Observable<Track> topTracks();
+	Observable<Artist> topArtists();
+	Observable<Album> topAlbums();
+
+	Observable<Track> getAlbumTracks(Album album);
 	
 }

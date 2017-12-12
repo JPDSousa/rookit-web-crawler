@@ -1,6 +1,9 @@
 <TITLE>
+<TITLE> (<FEAT>)
+<TITLE> (with <FEAT>)
 <TITLE> feat.<FEAT> (<IGNORE>)
 <TITLE> feat.<FEAT> (<EXTRA> <VERSION>)
+<TITLE> (feat. <FEAT>)
 <TITLE> (feat.<FEAT>) [<EXTRA> <VERSION>]
 <TITLE> - <VTOKEN> <VERSION>
 <TITLE> - <EXTRA> <VERSION>

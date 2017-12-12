@@ -106,18 +106,18 @@ abstract class AbstractModelFactory<Ar, Al, Tr> implements ModelFactory<Ar, Al, 
 	
 	protected String bestMatch(Collection<String> search, String str) {
 		if(search.isEmpty()) {
-			return null;
+			throw new RuntimeException("Cannot find the best match in an empty collection");
 		}
 		final String lowerString = str.toLowerCase();
 		return search.parallelStream()
 				.map(String::toLowerCase)
-				.filter(searchStr -> !containsAny(searchStr, Artist.SUSPICIOUS_NAME_CHARSEQS))
+				.filter(searchStr -> !containsAny(searchStr, Parser.SUSPICIOUS_NAME_CHARSEQS))
 				.map(searchStr -> Pair.of(searchStr, distance.apply(searchStr, lowerString)))
 				.filter(pair -> pair.getRight() >= 0)
 				.filter(pair -> pair.getRight() < levenshteinThreshold)
 				.reduce(this::compare)
 				.map(Pair::getLeft)
-				.orElse(null);
+				.orElseThrow(() -> new RuntimeException("No artist name left"));
 	}
 	
 	private boolean containsAny(String searchStr, String[] strs) {

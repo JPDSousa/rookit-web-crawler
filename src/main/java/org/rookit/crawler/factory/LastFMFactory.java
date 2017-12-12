@@ -139,4 +139,9 @@ public class LastFMFactory extends AbstractModelFactory<de.umass.lastfm.Artist, 
 		return null;
 	}
 
+	@Override
+	public Set<Artist> toArtist(de.umass.lastfm.Artist source) {
+		return artistFactory.getArtistsFromFormat(source.getName());
+	}
+
 }

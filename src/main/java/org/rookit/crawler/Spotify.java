@@ -1,129 +1,274 @@
 package org.rookit.crawler;
 
-import static org.rookit.crawler.AvailableServices.*;
+import static org.rookit.crawler.AvailableServices.SPOTIFY;
 
 import java.io.IOException;
-import java.time.Duration;
-import java.util.Collection;
 import java.util.List;
-import java.util.Set;
-import java.util.stream.Stream;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.FutureTask;
+import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
-import org.apache.commons.lang3.tuple.Pair;
 import org.bson.Document;
+import org.mapdb.DB;
+import org.rookit.crawler.config.SpotifyConfig;
 import org.rookit.crawler.factory.SpotifyFactory;
-import org.rookit.crawler.utils.CrawlerIOUtils;
-import org.rookit.crawler.utils.spotify.PageSupplier;
+import org.rookit.crawler.utils.spotify.PageObservable;
+import org.rookit.dm.RookitModel;
 import org.rookit.dm.album.Album;
-import org.rookit.dm.album.TypeRelease;
 import org.rookit.dm.artist.Artist;
 import org.rookit.dm.genre.Genre;
 import org.rookit.dm.track.Track;
 
-import com.google.common.collect.Sets;
+import com.google.common.base.Objects;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
+import com.google.common.util.concurrent.RateLimiter;
 import com.wrapper.spotify.Api;
-import com.wrapper.spotify.exceptions.WebApiException;
-import com.wrapper.spotify.models.AlbumType;
-import com.wrapper.spotify.models.Image;
-import com.wrapper.spotify.models.Page;
-import com.wrapper.spotify.models.SimpleAlbum;
-import com.wrapper.spotify.models.SimpleArtist;
+import com.wrapper.spotify.methods.Request;
+import com.wrapper.spotify.methods.albums.AlbumsRequest;
+import com.wrapper.spotify.methods.audiofeatures.AudioFeaturesRequest;
+import com.wrapper.spotify.methods.tracks.TracksRequest;
+import com.wrapper.spotify.models.album.SimpleAlbum;
+import com.wrapper.spotify.models.artist.SimpleArtist;
+import com.wrapper.spotify.models.audio.AudioFeature;
+import com.wrapper.spotify.models.authentication.ClientCredentials;
+import com.wrapper.spotify.models.playlist.Playlist;
+import com.wrapper.spotify.models.playlist.PlaylistTrack;
+import com.wrapper.spotify.models.track.SimpleTrack;
 
-class Spotify extends AbstractMusicService {
-	
+import io.reactivex.Observable;
+import io.reactivex.ObservableSource;
+import io.reactivex.schedulers.Schedulers;
+
+@SuppressWarnings("javadoc")
+public class Spotify implements MusicService {
+
+	private static final Logger LOGGER = Logger.getLogger(Spotify.class.getName());
+
 	private final Api api;
-	private final int limit;
 	private final SpotifyFactory factory;
-	
-	public Spotify() {
-		super(20);
-		// TODO add config
+
+	public Spotify(SpotifyConfig config, DB cache) {
+		if(cache == null) {
+			LOGGER.warning("No cache provided");
+		}
+		final RateLimiter rateLimiter = RateLimiter.create(config.getRateLimit());
+		final ClientCredentials credentials;
 		factory = new SpotifyFactory();
-		limit = 30;
-		api = Api.builder()
-				.clientId("366eacf6d13f424aa64f3138def16062")
-				.clientSecret("9a723fbc54ca4bb1a24601c1ba59e286")
-				.build();
-	}
-	
-	private String encode(String source) {
-		return source.replace(" ", "+");
+		try {
+			credentials = Api.builder()
+					.clientId(config.getClientId())
+					.clientSecret(config.getClientSecret())
+					.build()
+					.clientCredentialsGrant()
+					.build()
+					.exec();
+			api = Api.builder()
+					.accessToken(credentials.getAccessToken())
+					.cache(cache)
+					.rateLimiter(rateLimiter)
+					.build();
+			LOGGER.info("Spotify access token: " + credentials.getAccessToken());
+			LOGGER.info("Spotify token expires in " + credentials.getExpiresIn() + " seconds");
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+		LOGGER.info("Spotify crawler created");
 	}
 
 	@Override
-	public Stream<Track> searchTrack(Track track) {
-		final String title = track.getTitle().toString();
-		return Stream.generate(new PageSupplier<>(limit, offset -> searchByTitle(limit, offset, title)))
-				.map(Page::getItems)
-				.flatMap(Collection::parallelStream)
-				.map(factory::toTrack);
+	public String getName() {
+		return SPOTIFY.name();
+	}
+
+	@Override
+	public Observable<Track> searchTrack(Track track) {
+		final Artist artist = Iterables.getFirst(track.getMainArtists(), null);
+		final String query = new StringBuilder("track:")
+				.append(track.getTitle().toString())
+				.append(" artist:")
+				.append(artist != null ? artist.getName() : "*")
+				.toString();
+		LOGGER.info("Searching for track '" + track.getLongFullTitle() + 
+				"' with query: " + query);
+
+		return Observable.create(new PageObservable<>(api, api.searchTracks(query).build()))
+				.buffer(AudioFeaturesRequest.MAX_IDS)
+				.flatMap(this::getAudioFeatures);
 	}
 	
-	private Page<com.wrapper.spotify.models.Track> searchByTitle(int limit, int offset, String title) {
+	private Observable<Track> getAudioFeatures(List<com.wrapper.spotify.models.track.Track> tracks) {
 		try {
-			return api.searchTracks(encode(title)).limit(limit).offset(offset).build().get();
-		} catch (IOException | WebApiException e) {
+			final Map<String, com.wrapper.spotify.models.track.Track> groupedTracks = tracks.stream()
+					.collect(Collectors.toMap(com.wrapper.spotify.models.track.Track::getId, track -> track));
+			final List<String> ids = Lists.newArrayList(groupedTracks.keySet());
+			final Map<String, AudioFeature> audioFeatures = api.getAudioFeatures(ids).build().exec().stream()
+					.collect(Collectors.toMap(AudioFeature::getId, audioFeature -> audioFeature));
+			return Observable.fromIterable(groupedTracks.keySet())
+					.map(id -> factory.toTrack(groupedTracks.get(id), audioFeatures.get(id)));
+		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
 	}
 
 	@Override
-	public Stream<Track> searchArtistTracks(Artist artist) {
-		final String query = "artist:" + artist.getName();
-		return Stream.generate(new PageSupplier<>(limit, offset -> searchByTitle(limit, offset, query)))
-				.map(Page::getItems)
-				.flatMap(Collection::parallelStream)
+	public Observable<Track> getArtistTracks(Artist artist) {
+		final String id = getId(artist);
+		if(id == null) {
+			throw new RuntimeException("Cannot find id for artist: " + artist.getName());
+		}
+		LOGGER.info("Fetching for artist tracks: " + id);
+		final ExecutorService pool = Executors.newCachedThreadPool();
+		return Observable.create(new PageObservable<>(api, api.getAlbumsForArtist(id).build()))
+				.map(SimpleAlbum::getId)
+				.distinctUntilChanged()
+				.buffer(AlbumsRequest.MAX_IDS)
+				.map(ids -> api.getAlbums(ids).build())
+				.flatMap(request -> Observable.fromFuture(pool.submit(() -> request.exec())))
+				.flatMap(Observable::fromIterable)
+				.map(com.wrapper.spotify.models.album.Album::getTracks)
+				.flatMap(page -> Observable.create(new PageObservable<>(api, page)))
+				.filter(t -> containsArtist(t, id))
+				.map(SimpleTrack::getId)
+				.buffer(TracksRequest.MAX_IDS)
+				.map(ids -> api.getTracks(ids).build())
+				.flatMap(request -> Observable.fromFuture(pool.submit(() -> request.exec())))
+				.flatMap(Observable::fromIterable)
 				.map(factory::toTrack);
 	}
 
-	@Override
-	public Stream<Track> searchRelatedTracks(Track track) {
-		final String query = track.getTitle().toString();
-		return Stream.generate(new PageSupplier<>(limit, offset -> searchByTitle(limit, offset, query)))
-				.map(Page::getItems)
-				.flatMap(Collection::parallelStream)
-				.map(factory::toTrack);
+	private boolean containsArtist(SimpleTrack t, String id) {
+		return t.getArtists().stream()
+				.map(SimpleArtist::getId)
+				.anyMatch(i -> Objects.equal(i, id));
+	}
+
+	private String getId(RookitModel element) {
+		final Document doc = element.getExternalMetadata(getName());
+		return doc != null ? doc.getString(ID) : null;
 	}
 
 	@Override
-	public Stream<Artist> searchArtist(Artist artist) {
+	public Observable<Artist> searchArtist(Artist artist) {
 		final String query = artist.getName();
-		return Stream.generate(new PageSupplier<>(limit, offset -> searchByArtist(limit, offset, query)))
-				.map(Page::getItems)
-				.flatMap(Collection::parallelStream)
-				.map(a -> factory.toArtist(a, query));
+		LOGGER.info("Searching artist with query: " + query);
+		return Observable.create(new PageObservable<>(api, api.searchArtists(query).build()))
+				.map(factory::toArtist)
+				.flatMap(Observable::fromIterable);
+	}
+
+	@Override
+	public Observable<Artist> searchRelatedArtists(Artist artist) {
+		final String id = getId(artist);
+		if(id == null) {
+			throw new RuntimeException("Cannot find id for artist: " + artist.getName());
+		}
+		LOGGER.info("Searching for related artists of artist: " + id);
+		final ExecutorService service = Executors.newSingleThreadExecutor();
+		return Observable.fromFuture(new FutureTask<>(() -> api.getArtistRelatedArtists(id).build().exec()), Schedulers.from(service))
+				.flatMap(Observable::fromIterable)
+				.map(factory::toArtist)
+				.flatMap(Observable::fromIterable);
+	}
+
+	@Override
+	public Observable<Album> searchAlbum(Album album) {
+		final Artist artist = Iterables.getFirst(album.getArtists(), null);
+		final StringBuilder query = new StringBuilder("album:")
+				.append(album.getTitle())
+				.append(" artist:")
+				.append(artist != null ? artist.getName() : "*");
+		LOGGER.info("Searching for albums with query: " + query);
+		return Observable.create(new PageObservable<>(api, api.searchAlbums(query.toString()).build()))
+				.map(SimpleAlbum::getId)
+				.buffer(AlbumsRequest.MAX_IDS)
+				.map(ids -> api.getAlbums(ids).build())
+				.flatMap(this::asyncRequest)
+				.flatMap(Observable::fromIterable)
+				.map(factory::toAlbum);
+	}
+
+	@Override
+	public Observable<Track> getAlbumTracks(Album album) {
+		final String id = getId(album);
+		if(id == null) {
+			throw new RuntimeException("Cannot find id for album: " + album.getTitle());
+		}
+		LOGGER.info("Searching for related artists of artist: " + id);
+		return Observable.just(api.getAlbum(id).build())
+				.flatMap(this::asyncRequest)
+				.flatMap(a -> Observable.create(new PageObservable<>(api, a.getTracks())))
+				.map(SimpleTrack::getId)
+				.buffer(TracksRequest.MAX_IDS)
+				.map(ids -> api.getTracks(ids).build())
+				.flatMap(this::asyncRequest)
+				.flatMap(Observable::fromIterable)
+				.map(factory::toTrack);
 	}
 	
-	private Page<com.wrapper.spotify.models.Artist> searchByArtist(int limit, int offset, String query) {
-		try {
-			return api.searchArtists(encode(query)).limit(limit).offset(offset).build().get();
-		} catch (IOException | WebApiException e) {
-			throw new RuntimeException(e);
-		}
+	private <T> ObservableSource<T> asyncRequest(Request<T> request) {
+		return Observable.fromCallable(() -> request.exec())
+				.subscribeOn(Schedulers.io());
 	}
 
 	@Override
-	public Stream<Artist> searchRelatedArtists(Artist artist) {
-		// TODO Auto-generated method stub
-		return null;
+	public Observable<Genre> searchGenre(Genre genre) {
+		LOGGER.info("Searching genres is disabled in spotify crawler");
+		return Observable.empty();
 	}
 
 	@Override
-	public Stream<Album> searchAlbum(Album album) {
-		// TODO Auto-generated method stub
-		return null;
+	public Observable<Genre> searchRelatedGenres(Genre genre) {
+		LOGGER.info("Searching related genres is disabled in spotify crawler");
+		return Observable.empty();
 	}
 
 	@Override
-	public Stream<Genre> searchGenre(Genre genre) {
-		// TODO Auto-generated method stub
-		return null;
+	public Observable<Track> topTracks() {
+		LOGGER.info("Fetching top tracks");
+		return Observable.just(api.getPlaylist("spotify", "37i9dQZF1DXcBWIGoYBM5M").build())
+				.flatMap(this::asyncRequest)
+				.map(Playlist::getTracks)
+				.flatMap(page -> Observable.create(new PageObservable<>(api, page)))
+				.map(PlaylistTrack::getTrack)
+				.map(factory::toTrack);
 	}
 
 	@Override
-	public Stream<Genre> searchRelatedGenres(Genre genre) {
-		// TODO Auto-generated method stub
-		return null;
+	public Observable<Artist> topArtists() {
+		LOGGER.info("Fetching top artists");
+		final ExecutorService pool = Executors.newSingleThreadExecutor();
+		return Observable.just(api.getPlaylist("spotifycharts", "37i9dQZEVXbMDoHDwVN2tF").build())
+				.map(request -> new FutureTask<>(() -> request.exec()))
+				.flatMap(future -> Observable.fromFuture(future, Schedulers.from(pool)))
+				.map(Playlist::getTracks)
+				.flatMap(page -> Observable.create(new PageObservable<>(api, page)))
+				.map(PlaylistTrack::getTrack)
+				.map(factory::toTrack)
+				.map(Track::getMainArtists)
+				.flatMap(Observable::fromIterable);
+	}
+
+	@Override
+	public Observable<Album> topAlbums() {
+		LOGGER.info("Fetching top albums");
+		final ExecutorService pool = Executors.newCachedThreadPool();
+		return Observable.just(api.getPlaylist("spotify", "37i9dQZF1DX0rV7skaITBo").build())
+				.map(request -> new FutureTask<>(() -> request.exec()))
+				.flatMap(future -> Observable.fromFuture(future, Schedulers.from(pool)))
+				.map(Playlist::getTracks)
+				.flatMap(page -> Observable.create(new PageObservable<>(api, page)))
+				.map(PlaylistTrack::getTrack)
+				.map(com.wrapper.spotify.models.track.Track::getAlbum)
+				.map(SimpleAlbum::getId)
+				.buffer(AlbumsRequest.MAX_IDS)
+				.map(ids -> api.getAlbums(ids).build())
+				.flatMap(this::asyncRequest)
+				.flatMap(Observable::fromIterable)
+				.map(factory::toAlbum);
 	}
 
 }

@@ -1,44 +1,34 @@
 package org.rookit.crawler;
 
 import static org.junit.Assert.*;
+import static org.rookit.crawler.TestUtils.readSpotifyConfig;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Set;
 
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.rookit.crawler.config.MusicServiceConfig;
-import org.rookit.crawler.config.SpotifyConfig;
 import org.rookit.dm.artist.Artist;
 import org.rookit.dm.artist.ArtistFactory;
 import org.rookit.dm.artist.TypeArtist;
 import org.rookit.dm.track.Track;
 import org.rookit.parser.result.SingleTrackAlbumBuilder;
-import org.rookit.utils.resource.Resources;
 
 import com.google.common.collect.Sets;
 
 @SuppressWarnings("javadoc")
 public class RookitCrawlerTest {
 
-	private static final Path SECRET_PATH = Resources.RESOURCES_TEST.resolve("client").resolve("secret.txt");
 	
 	private static RookitCrawler guineaPig;
 	private static ArtistFactory artistFactory;
 
 	@BeforeClass
 	public static void setUpBeforeClass() throws IOException {
-		final BufferedReader reader = Files.newBufferedReader(SECRET_PATH);
-		final SpotifyConfig sConfig = new SpotifyConfig();
 		final MusicServiceConfig config = new MusicServiceConfig();
-		config.setSpotify(sConfig);
-		sConfig.setClientId(reader.readLine());
-		sConfig.setClientSecret(reader.readLine());
-		reader.close();
+		config.setSpotify(readSpotifyConfig());
 		artistFactory = ArtistFactory.getDefault();
 		guineaPig = new RookitCrawler(config);
 	}

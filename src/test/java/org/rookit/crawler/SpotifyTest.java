@@ -2,7 +2,9 @@ package org.rookit.crawler;
 
 import static org.junit.Assert.*;
 import static org.hamcrest.Matchers.*;
+import static org.rookit.crawler.TestUtils.readSpotifyConfig;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Set;
 
@@ -11,6 +13,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.mapdb.DB;
 import org.mapdb.DBMaker;
+import org.rookit.crawler.config.SpotifyConfig;
 import org.rookit.dm.album.Album;
 import org.rookit.dm.album.AlbumFactory;
 import org.rookit.dm.artist.Artist;
@@ -31,13 +34,13 @@ public class SpotifyTest {
 	private static Spotify spotify;
 	
 	@BeforeClass
-	public static void setUpBeforeClass() {
-		
+	public static void setUpBeforeClass() throws IOException {
+		final SpotifyConfig config = readSpotifyConfig();
 		albumFactory = AlbumFactory.getDefault();
 		artistFactory = ArtistFactory.getDefault();
 		factory = DMTestFactory.getDefault();
 		cache = DBMaker.memoryDB().make();
-		spotify = new Spotify(cache);
+		spotify = new Spotify(config, cache);
 	}
 
 	@AfterClass

@@ -77,9 +77,10 @@ abstract class AbstractModelFactory<Ar, Al, Tr> implements ModelFactory<Ar, Al, 
 	}
 	
 	protected SingleTrackAlbumBuilder parseTrackTitle(String title) {
-		final SingleTrackAlbumBuilder result = parser.parse(title);
+		return parser.parse(title)
+				.filter(result -> result.getScore() > 0)
+				.orElseThrow(() -> new RuntimeException("Cannot parse " + title));
 		// TODO set score in else clause
-		return result.getScore() > 0 ? result : SingleTrackAlbumBuilder.create().withTitle(title);
 	}
 	
 	protected Set<Artist> toArtists(String name, String mbId) {

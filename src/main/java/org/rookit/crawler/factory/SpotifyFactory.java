@@ -80,6 +80,7 @@ public class SpotifyFactory extends AbstractModelFactory<com.wrapper.spotify.mod
 				.append(PREVIEW, source.getPreviewUrl())
 				.append(URI, source.getUri());
 		final Track track = parser.parse(source.getName())
+				.orElseThrow(() -> new RuntimeException("Cannot parse" + source.getName()))
 				.withDisc(source.getDiscNumber()+"")
 				.withNumber(source.getTrackNumber())
 				.withDuration(Duration.ofMillis(source.getDuration()))

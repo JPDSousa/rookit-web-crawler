@@ -74,7 +74,7 @@ public class Spotify implements MusicService {
 			LOGGER.info("Spotify access token: " + credentials.getAccessToken());
 			LOGGER.info("Spotify token expires in " + credentials.getExpiresIn() + " seconds");
 		} catch (IOException e) {
-			throw new RuntimeException(e);
+			throw new RuntimeException("Cannot connect...", e);
 		}
 		LOGGER.info("Spotify crawler created");
 	}

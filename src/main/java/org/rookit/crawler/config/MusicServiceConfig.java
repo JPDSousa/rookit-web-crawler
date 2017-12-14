@@ -8,8 +8,11 @@ import java.nio.file.Paths;
 @SuppressWarnings("javadoc")
 public class MusicServiceConfig {
 	
-	private static final Path DEFAULT_CACHE_PATH = Paths.get("crawler", "cache");
+	private static final Path DEFAULT_CRAWLER_PATH = Paths.get("crawler");
+	private static final Path DEFAULT_CACHE_PATH = DEFAULT_CRAWLER_PATH.resolve("cache");
+	private static final Path DEFAULT_FORMAT_PATH = DEFAULT_CRAWLER_PATH.resolve("formats.txt");
 	
+	private String formatsPath;
 	private String cachePath;
 	private LastFMConfig lastfm;
 	private SpotifyConfig spotify;
@@ -36,6 +39,14 @@ public class MusicServiceConfig {
 
 	public void setSpotify(SpotifyConfig spotify) {
 		this.spotify = spotify;
+	}
+
+	public String getFormatsPath() {
+		return getOrDefault(formatsPath, DEFAULT_FORMAT_PATH.toString());
+	}
+
+	public void setFormatsPath(String formatsPath) {
+		this.formatsPath = formatsPath;
 	}
 	
 }

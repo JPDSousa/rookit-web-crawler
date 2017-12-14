@@ -10,11 +10,13 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.commons.text.similarity.LevenshteinDistance;
 import org.bson.Document;
+import org.rookit.crawler.config.MusicServiceConfig;
 import org.rookit.dm.album.AlbumFactory;
 import org.rookit.dm.artist.Artist;
 import org.rookit.dm.artist.ArtistFactory;
@@ -31,6 +33,8 @@ import com.google.common.collect.Maps;
 
 abstract class AbstractModelFactory<Ar, Al, Tr> implements ModelFactory<Ar, Al, Tr> {
 	
+	protected static final Logger LOGGER = Logger.getLogger(ModelFactory.class.getName());
+	
 	protected final Parser<String, SingleTrackAlbumBuilder> parser;
 	protected final LevenshteinDistance distance;
 	protected final int levenshteinThreshold;
@@ -39,12 +43,12 @@ abstract class AbstractModelFactory<Ar, Al, Tr> implements ModelFactory<Ar, Al, 
 	protected final AlbumFactory albumFactory;
 	protected final GenreFactory genreFactory;
 	
-	protected AbstractModelFactory() {
-		this(10);
+	protected AbstractModelFactory(MusicServiceConfig config) {
+		this(config, 10);
 	}
 	
-	protected AbstractModelFactory(int levenshteinThreshold) {
-		parser = createParser(); 
+	protected AbstractModelFactory(MusicServiceConfig config, int levenshteinThreshold) {
+		parser = createParser(config.getFormatsPath()); 
 		this.artistFactory = ArtistFactory.getDefault();
 		this.albumFactory = AlbumFactory.getDefault();
 		this.genreFactory = GenreFactory.getDefault();
@@ -62,9 +66,10 @@ abstract class AbstractModelFactory<Ar, Al, Tr> implements ModelFactory<Ar, Al, 
 		}
 	}
 	
-	protected Parser<String, SingleTrackAlbumBuilder> createParser() {
+	protected Parser<String, SingleTrackAlbumBuilder> createParser(String formatsPath) {
 		try {
-			FormatList formats = FormatList.readFromPath(Paths.get("src", "main", "resources", "parser", "formats.txt"));
+			LOGGER.info("Logging formats from: " + formatsPath);
+			final FormatList formats = FormatList.readFromPath(Paths.get(formatsPath));
 			final ParserFactory factory = ParserFactory.create();
 			final ParsingConfig topConfig = new ParsingConfig();
 			final ParserConfiguration config = ParserConfiguration.create(SingleTrackAlbumBuilder.class, topConfig);

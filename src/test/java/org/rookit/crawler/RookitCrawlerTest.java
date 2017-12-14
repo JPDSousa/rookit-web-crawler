@@ -1,7 +1,7 @@
 package org.rookit.crawler;
 
 import static org.junit.Assert.*;
-import static org.rookit.crawler.TestUtils.readSpotifyConfig;
+import static org.rookit.crawler.TestUtils.readConfig;
 
 import java.io.IOException;
 import java.util.Set;
@@ -27,8 +27,7 @@ public class RookitCrawlerTest {
 
 	@BeforeClass
 	public static void setUpBeforeClass() throws IOException {
-		final MusicServiceConfig config = new MusicServiceConfig();
-		config.setSpotify(readSpotifyConfig());
+		final MusicServiceConfig config = readConfig();
 		artistFactory = ArtistFactory.getDefault();
 		guineaPig = new RookitCrawler(config);
 	}

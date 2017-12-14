@@ -11,6 +11,7 @@ import java.util.Date;
 import java.util.Set;
 
 import org.bson.Document;
+import org.rookit.crawler.config.MusicServiceConfig;
 import org.rookit.crawler.utils.CrawlerIOUtils;
 import org.rookit.dm.album.Album;
 import org.rookit.dm.artist.Artist;
@@ -23,8 +24,8 @@ import de.umass.lastfm.MusicEntry;
 @SuppressWarnings("javadoc")
 public class LastFMFactory extends AbstractModelFactory<de.umass.lastfm.Artist, de.umass.lastfm.Album, de.umass.lastfm.Track> {
 
-	public LastFMFactory(int levenshteinThreshold) {
-		super(levenshteinThreshold);
+	public LastFMFactory(MusicServiceConfig config, int levenshteinThreshold) {
+		super(config, levenshteinThreshold);
 	}
 
 	@Override

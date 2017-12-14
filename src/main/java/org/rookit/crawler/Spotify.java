@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 
 import org.bson.Document;
 import org.mapdb.DB;
+import org.rookit.crawler.config.MusicServiceConfig;
 import org.rookit.crawler.config.SpotifyConfig;
 import org.rookit.crawler.factory.SpotifyFactory;
 import org.rookit.crawler.utils.spotify.PageObservable;
@@ -51,17 +52,18 @@ public class Spotify implements MusicService {
 	private final Api api;
 	private final SpotifyFactory factory;
 
-	public Spotify(SpotifyConfig config, DB cache) {
+	public Spotify(MusicServiceConfig config, DB cache) {
 		if(cache == null) {
 			LOGGER.warning("No cache provided");
 		}
-		final RateLimiter rateLimiter = RateLimiter.create(config.getRateLimit());
+		final SpotifyConfig sConfig = config.getSpotify();
+		final RateLimiter rateLimiter = RateLimiter.create(sConfig.getRateLimit());
 		final ClientCredentials credentials;
-		factory = new SpotifyFactory();
+		factory = new SpotifyFactory(config);
 		try {
 			credentials = Api.builder()
-					.clientId(config.getClientId())
-					.clientSecret(config.getClientSecret())
+					.clientId(sConfig.getClientId())
+					.clientSecret(sConfig.getClientSecret())
 					.build()
 					.clientCredentialsGrant()
 					.build()

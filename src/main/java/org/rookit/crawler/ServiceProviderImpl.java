@@ -24,7 +24,7 @@ class ServiceProviderImpl implements ServiceProvider {
 				.make();
 		activeServices = Maps.newHashMapWithExpectedSize(AvailableServices.values().length);
 		//			activeServices.put(LASTFM, new LastFM(config.getLastfm()));
-		activeServices.put(SPOTIFY, new Spotify(config.getSpotify(), cache));
+		activeServices.put(SPOTIFY, new Spotify(config, cache));
 	}
 
 	@Override

@@ -27,6 +27,7 @@ import static org.rookit.crawler.MusicService.*;
 
 import org.apache.commons.lang3.tuple.Pair;
 import org.bson.Document;
+import org.rookit.crawler.config.MusicServiceConfig;
 import org.rookit.crawler.utils.CrawlerIOUtils;
 import org.rookit.dm.album.Album;
 import org.rookit.dm.album.TypeRelease;
@@ -39,6 +40,10 @@ public class SpotifyFactory extends AbstractModelFactory<com.wrapper.spotify.mod
 	private static final float IS_ACOUSTIC_THRESHOLD = 0.8f;
 	private static final float IS_INSTRUMENTAL_THRESHOLD = 0.6f;
 	private static final float IS_LIVE_THRESHOLD = 0.8f;
+	
+	public SpotifyFactory(MusicServiceConfig config) {
+		super(config);
+	}
 	
 	@Override
 	public Track toTrack(com.wrapper.spotify.models.track.Track source) {

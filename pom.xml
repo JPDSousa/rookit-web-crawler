@@ -171,22 +171,22 @@
 			<dependency>
 				<groupId>com.github.JPDSousa</groupId>
 				<artifactId>rookit-data-model</artifactId>
-				<version>master-SNAPSHOT</version>
+				<version>-SNAPSHOT</version>
 			</dependency>
 			<dependency>
 				<groupId>com.github.JPDSousa</groupId>
 				<artifactId>rookit-utils</artifactId>
-				<version>master-SNAPSHOT</version>
+				<version>-SNAPSHOT</version>
 			</dependency>
 			<dependency>
 				<groupId>com.github.JPDSousa</groupId>
 				<artifactId>rookit-parser</artifactId>
-				<version>master-SNAPSHOT</version>
+				<version>-SNAPSHOT</version>
 			</dependency>
 			<dependency>
 				<groupId>com.github.JPDSousa</groupId>
 				<artifactId>spotify-web-api-java</artifactId>
-				<version>master-SNAPSHOT</version>
+				<version>-SNAPSHOT</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>

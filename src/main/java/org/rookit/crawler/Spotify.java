@@ -3,7 +3,6 @@ package org.rookit.crawler;
 import static org.rookit.crawler.AvailableServices.SPOTIFY;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
@@ -20,7 +19,6 @@ import org.rookit.dm.album.Album;
 import org.rookit.dm.artist.Artist;
 import org.rookit.dm.genre.Genre;
 import org.rookit.dm.track.Track;
-import org.rookit.dm.track.TrackTitle;
 
 import com.google.common.base.Objects;
 import com.google.common.collect.Iterables;
@@ -39,14 +37,10 @@ import com.wrapper.spotify.models.playlist.Playlist;
 import com.wrapper.spotify.models.playlist.PlaylistTrack;
 import com.wrapper.spotify.models.track.SimpleTrack;
 
-import io.reactivex.Completable;
 import io.reactivex.Observable;
 import io.reactivex.ObservableSource;
 import io.reactivex.Scheduler;
-import io.reactivex.Single;
 import io.reactivex.schedulers.Schedulers;
-import io.reactivex.subjects.ReplaySubject;
-import io.reactivex.subjects.Subject;
 
 @SuppressWarnings("javadoc")
 public class Spotify implements MusicService {
@@ -86,7 +80,7 @@ public class Spotify implements MusicService {
 		}
 		LOGGER.info("Spotify crawler created");
 	}
-	
+
 	public Scheduler getRequestScheduler() {
 		return requestScheduler;
 	}
@@ -99,42 +93,19 @@ public class Spotify implements MusicService {
 	@Override
 	public Observable<Track> searchTrack(Track track) {
 		final Artist artist = Iterables.getFirst(track.getMainArtists(), null);
-		final Subject<com.wrapper.spotify.models.track.Track> subject = ReplaySubject.create();
-		Completable.complete()
-		.observeOn(Schedulers.single())
-		//searches with the complete title
-		.andThen(Completable.fromAction(() -> {
-			searchTracksAndAppend(track.getLongFullTitle(), subject);
-		}))
-		.andThen(Single.just(track.getTitle().toString()))
-		.map(title -> title.split(" "))
-		.flatMapObservable(Observable::fromArray)
-		.filter(word -> word.length() > 1)
-		// searches word by word
-		.flatMapCompletable(word -> Completable.fromAction(() -> {
-			final TrackTitle query = new TrackTitle(word);
-			query.appendArtists(Arrays.asList(artist));
-			searchTracksAndAppend(query, subject);
-		})).subscribe(() -> {
-			subject.onComplete();
-			LOGGER.info("Track search complete!");
-		});
-		return subject
+		final String query = new StringBuilder("track:")
+				.append(track.getTitle().toString())
+				.append(" artist:")
+				.append(artist != null ? artist.getName() : "*")
+				.toString();
+		LOGGER.info("Searching for track '" + track.getLongFullTitle() + "' with query: " + query);
+		
+		return Observable.create(PageObservable.create(api, api.searchTracks(query).build()))
 				.buffer(AudioFeaturesRequest.MAX_IDS)
 				.doAfterNext(tracks -> LOGGER.info("More " + tracks.size() + " results for track: " + track.getIdAsString()))
 				.flatMap(this::getAudioFeatures);
 	}
-	
-	private void searchTracksAndAppend(TrackTitle title, Subject<com.wrapper.spotify.models.track.Track> subject) {
-		final String query = new StringBuilder("track:")
-				.append(title.getTitle())
-				.append(" artist:")
-				.append(title.getArtists() != null ? title.getArtists() : "*")
-				.toString();
-		LOGGER.info("Searching for track '" + title.toString() + "' with query: " + query);
-		PageObservable.create(api, api.searchTracks(query).build()).drainTo(subject);
-	}
-	
+
 	private Observable<Track> getAudioFeatures(List<com.wrapper.spotify.models.track.Track> tracks) {
 		try {
 			final Map<String, com.wrapper.spotify.models.track.Track> groupedTracks = tracks.stream()
@@ -156,7 +127,7 @@ public class Spotify implements MusicService {
 			throw new RuntimeException("Cannot find id for artist: " + artist.getName());
 		}
 		LOGGER.info("Fetching for artist tracks: " + id);
-		
+
 		return Observable.create(PageObservable.create(api, api.getAlbumsForArtist(id).build()))
 				.observeOn(getRequestScheduler())
 				.map(SimpleAlbum::getId)
@@ -248,7 +219,7 @@ public class Spotify implements MusicService {
 				.flatMap(Observable::fromIterable)
 				.map(factory::toTrack);
 	}
-	
+
 	private <T> ObservableSource<T> asyncRequest(Request<T> request) {
 		return Observable.fromCallable(() -> request.exec())
 				.observeOn(getRequestScheduler());

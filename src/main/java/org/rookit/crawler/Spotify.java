@@ -97,6 +97,7 @@ public class Spotify implements MusicService {
 
 		return Observable.create(new PageObservable<>(api, api.searchTracks(query).build()))
 				.buffer(AudioFeaturesRequest.MAX_IDS)
+				.doAfterNext(tracks -> LOGGER.info("More " + tracks.size() + " results for track: " + track.getIdAsString()))
 				.flatMap(this::getAudioFeatures);
 	}
 	

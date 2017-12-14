@@ -4,6 +4,7 @@ import static org.rookit.crawler.AvailableServices.values;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
@@ -19,9 +20,13 @@ import org.rookit.dm.artist.Artist;
 import org.rookit.dm.artist.similarity.ArtistComparator;
 import org.rookit.dm.genre.Genre;
 import org.rookit.dm.genre.similarity.GenreComparator;
+import org.rookit.dm.play.Playable;
 import org.rookit.dm.play.StaticPlaylist;
 import org.rookit.dm.play.similarity.PlaylistComparator;
 import org.rookit.dm.track.Track;
+import org.rookit.dm.track.audio.AudioFeature;
+import org.rookit.dm.track.audio.TrackKey;
+import org.rookit.dm.track.audio.TrackMode;
 import org.rookit.dm.track.similarity.TrackComparator;
 
 import com.google.common.collect.Maps;
@@ -61,11 +66,11 @@ public class RookitCrawler implements Closeable {
 				.flatMapMaybe(service -> service
 						.searchTrack(source)
 						.reduce(new Accumulator<>(source, comparator)))
-				.doAfterNext(track -> append(source, track))
+				.doAfterNext(track -> resolveTracks(source, track))
 				.ignoreElements();
 	}
 
-	private void append(Track master, Track slave) {
+	private void resolveTracks(Track master, Track slave) {
 		LOGGER.info("Pushing '" + slave.getLongFullTitle() + "' to " + master.getLongFullTitle());
 		if (master.getType() != slave.getType()) {
 			throw new RuntimeException("[" + master.getLongFullTitle() + "] and [" + master.getLongFullTitle()
@@ -73,12 +78,8 @@ public class RookitCrawler implements Closeable {
 		}
 		// TODO how to resolve title conflicts??????
 		master.getTitle();
-		if (slave.getBPM() > 0) {
-			master.setBPM(slave.getBPM());
-		}
-		if (master.getDuration() == null && slave.getDuration() != null) {
-			master.setDuration(slave.getDuration());
-		}
+		resolveAudioFeatures(master, slave);
+		resolvePlayable(master, slave);
 		for (String key : slave.getExternalMetadata().keySet()) {
 			master.putExternalMetadata(key, slave.getExternalMetadata(key));
 		}
@@ -106,7 +107,54 @@ public class RookitCrawler implements Closeable {
 			handleArtists(Arrays.asList(master.getMainArtists(), master.getFeatures(), master.getProducers()),
 					Arrays.asList(slave.getMainArtists(), slave.getFeatures(), slave.getProducers()));
 		}
-		Arrays.asList();
+	}
+	
+	private void resolvePlayable(Playable master, Playable slave) {
+		final Duration masterDuration = master.getDuration();
+		final Duration slaveDuration = slave.getDuration();
+		if ((masterDuration == null || masterDuration.isZero()) 
+				&& slaveDuration != null && !slaveDuration.isZero()) {
+			master.setDuration(slaveDuration);
+		}
+	}
+	
+	private void resolveAudioFeatures(AudioFeature master, AudioFeature slave) {
+		final short bpm = slave.getBPM();
+		final double danceability = slave.getDanceability();
+		final double energy = slave.getEnergy();
+		final TrackKey trackKey = slave.getTrackKey();
+		final TrackMode trackMode = slave.getTrackMode();
+		final double valence = slave.getValence();
+		final Boolean acoustic = slave.isAcoustic();
+		final Boolean instrumental = slave.isInstrumental();
+		final Boolean live = slave.isLive();
+		if (bpm > 0) {
+			master.setBPM(bpm);
+		}
+		if (danceability >= 0) {
+			master.setDanceability(danceability);
+		}
+		if (energy >= 0) {
+			master.setEnergy(energy);
+		}
+		if (trackKey != null) {
+			master.setTrackKey(trackKey);
+		}
+		if (trackMode != null) {
+			master.setTrackMode(trackMode);
+		}
+		if (valence >= 0) {
+			master.setValence(valence);
+		}
+		if (acoustic != null) {
+			master.setAcoustic(acoustic);
+		}
+		if (instrumental != null) {
+			master.setInstrumental(instrumental);
+		}
+		if (live != null) {
+			master.setLive(live);
+		}
 	}
 
 	/**

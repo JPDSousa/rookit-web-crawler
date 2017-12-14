@@ -1,7 +1,5 @@
 package org.rookit.crawler.config;
 
-import static org.rookit.utils.config.ConfigUtils.*;
-
 @SuppressWarnings("javadoc")
 public class SpotifyConfig {
 
@@ -26,7 +24,10 @@ public class SpotifyConfig {
 	}
 
 	public int getRateLimit() {
-		return getOrDefault(rateLimit, 20);
+		if(rateLimit > 0) {
+			return rateLimit;
+		}
+		return 20;
 	}
 
 	public void setRateLimit(int rateLimit) {

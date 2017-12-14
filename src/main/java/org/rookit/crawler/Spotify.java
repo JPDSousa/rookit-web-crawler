@@ -3,11 +3,9 @@ package org.rookit.crawler;
 import static org.rookit.crawler.AvailableServices.SPOTIFY;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.FutureTask;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
@@ -22,6 +20,7 @@ import org.rookit.dm.album.Album;
 import org.rookit.dm.artist.Artist;
 import org.rookit.dm.genre.Genre;
 import org.rookit.dm.track.Track;
+import org.rookit.dm.track.TrackTitle;
 
 import com.google.common.base.Objects;
 import com.google.common.collect.Iterables;
@@ -40,9 +39,14 @@ import com.wrapper.spotify.models.playlist.Playlist;
 import com.wrapper.spotify.models.playlist.PlaylistTrack;
 import com.wrapper.spotify.models.track.SimpleTrack;
 
+import io.reactivex.Completable;
 import io.reactivex.Observable;
 import io.reactivex.ObservableSource;
+import io.reactivex.Scheduler;
+import io.reactivex.Single;
 import io.reactivex.schedulers.Schedulers;
+import io.reactivex.subjects.ReplaySubject;
+import io.reactivex.subjects.Subject;
 
 @SuppressWarnings("javadoc")
 public class Spotify implements MusicService {
@@ -51,6 +55,7 @@ public class Spotify implements MusicService {
 
 	private final Api api;
 	private final SpotifyFactory factory;
+	private final Scheduler requestScheduler;
 
 	public Spotify(MusicServiceConfig config, DB cache) {
 		if(cache == null) {
@@ -59,6 +64,7 @@ public class Spotify implements MusicService {
 		final SpotifyConfig sConfig = config.getSpotify();
 		final RateLimiter rateLimiter = RateLimiter.create(sConfig.getRateLimit());
 		final ClientCredentials credentials;
+		this.requestScheduler = Schedulers.io();
 		factory = new SpotifyFactory(config);
 		try {
 			credentials = Api.builder()
@@ -80,6 +86,10 @@ public class Spotify implements MusicService {
 		}
 		LOGGER.info("Spotify crawler created");
 	}
+	
+	public Scheduler getRequestScheduler() {
+		return requestScheduler;
+	}
 
 	@Override
 	public String getName() {
@@ -89,18 +99,40 @@ public class Spotify implements MusicService {
 	@Override
 	public Observable<Track> searchTrack(Track track) {
 		final Artist artist = Iterables.getFirst(track.getMainArtists(), null);
-		final String query = new StringBuilder("track:")
-				.append(track.getTitle().toString())
-				.append(" artist:")
-				.append(artist != null ? artist.getName() : "*")
-				.toString();
-		LOGGER.info("Searching for track '" + track.getLongFullTitle() + 
-				"' with query: " + query);
-
-		return Observable.create(new PageObservable<>(api, api.searchTracks(query).build()))
+		final Subject<com.wrapper.spotify.models.track.Track> subject = ReplaySubject.create();
+		Completable.complete()
+		.observeOn(Schedulers.single())
+		//searches with the complete title
+		.andThen(Completable.fromAction(() -> {
+			searchTracksAndAppend(track.getLongFullTitle(), subject);
+		}))
+		.andThen(Single.just(track.getTitle().toString()))
+		.map(title -> title.split(" "))
+		.flatMapObservable(Observable::fromArray)
+		.filter(word -> word.length() > 1)
+		// searches word by word
+		.flatMapCompletable(word -> Completable.fromAction(() -> {
+			final TrackTitle query = new TrackTitle(word);
+			query.appendArtists(Arrays.asList(artist));
+			searchTracksAndAppend(query, subject);
+		})).subscribe(() -> {
+			subject.onComplete();
+			LOGGER.info("Track search complete!");
+		});
+		return subject
 				.buffer(AudioFeaturesRequest.MAX_IDS)
 				.doAfterNext(tracks -> LOGGER.info("More " + tracks.size() + " results for track: " + track.getIdAsString()))
 				.flatMap(this::getAudioFeatures);
+	}
+	
+	private void searchTracksAndAppend(TrackTitle title, Subject<com.wrapper.spotify.models.track.Track> subject) {
+		final String query = new StringBuilder("track:")
+				.append(title.getTitle())
+				.append(" artist:")
+				.append(title.getArtists() != null ? title.getArtists() : "*")
+				.toString();
+		LOGGER.info("Searching for track '" + title.toString() + "' with query: " + query);
+		PageObservable.create(api, api.searchTracks(query).build()).drainTo(subject);
 	}
 	
 	private Observable<Track> getAudioFeatures(List<com.wrapper.spotify.models.track.Track> tracks) {
@@ -124,21 +156,23 @@ public class Spotify implements MusicService {
 			throw new RuntimeException("Cannot find id for artist: " + artist.getName());
 		}
 		LOGGER.info("Fetching for artist tracks: " + id);
-		final ExecutorService pool = Executors.newCachedThreadPool();
-		return Observable.create(new PageObservable<>(api, api.getAlbumsForArtist(id).build()))
+		
+		return Observable.create(PageObservable.create(api, api.getAlbumsForArtist(id).build()))
+				.observeOn(getRequestScheduler())
 				.map(SimpleAlbum::getId)
 				.distinctUntilChanged()
 				.buffer(AlbumsRequest.MAX_IDS)
 				.map(ids -> api.getAlbums(ids).build())
-				.flatMap(request -> Observable.fromFuture(pool.submit(() -> request.exec())))
+				.flatMap(this::asyncRequest)
 				.flatMap(Observable::fromIterable)
 				.map(com.wrapper.spotify.models.album.Album::getTracks)
-				.flatMap(page -> Observable.create(new PageObservable<>(api, page)))
+				.flatMap(page -> Observable.create(PageObservable.create(api, page))
+						.observeOn(getRequestScheduler()))
 				.filter(t -> containsArtist(t, id))
 				.map(SimpleTrack::getId)
 				.buffer(TracksRequest.MAX_IDS)
 				.map(ids -> api.getTracks(ids).build())
-				.flatMap(request -> Observable.fromFuture(pool.submit(() -> request.exec())))
+				.flatMap(this::asyncRequest)
 				.flatMap(Observable::fromIterable)
 				.map(factory::toTrack);
 	}
@@ -158,7 +192,8 @@ public class Spotify implements MusicService {
 	public Observable<Artist> searchArtist(Artist artist) {
 		final String query = artist.getName();
 		LOGGER.info("Searching artist with query: " + query);
-		return Observable.create(new PageObservable<>(api, api.searchArtists(query).build()))
+		return Observable.create(PageObservable.create(api, api.searchArtists(query).build()))
+				.observeOn(getRequestScheduler())
 				.map(factory::toArtist)
 				.flatMap(Observable::fromIterable);
 	}
@@ -170,8 +205,8 @@ public class Spotify implements MusicService {
 			throw new RuntimeException("Cannot find id for artist: " + artist.getName());
 		}
 		LOGGER.info("Searching for related artists of artist: " + id);
-		final ExecutorService service = Executors.newSingleThreadExecutor();
-		return Observable.fromFuture(new FutureTask<>(() -> api.getArtistRelatedArtists(id).build().exec()), Schedulers.from(service))
+		return Observable.just(api.getArtistRelatedArtists(id).build())
+				.flatMap(this::asyncRequest)
 				.flatMap(Observable::fromIterable)
 				.map(factory::toArtist)
 				.flatMap(Observable::fromIterable);
@@ -185,7 +220,8 @@ public class Spotify implements MusicService {
 				.append(" artist:")
 				.append(artist != null ? artist.getName() : "*");
 		LOGGER.info("Searching for albums with query: " + query);
-		return Observable.create(new PageObservable<>(api, api.searchAlbums(query.toString()).build()))
+		return Observable.create(PageObservable.create(api, api.searchAlbums(query.toString()).build()))
+				.observeOn(getRequestScheduler())
 				.map(SimpleAlbum::getId)
 				.buffer(AlbumsRequest.MAX_IDS)
 				.map(ids -> api.getAlbums(ids).build())
@@ -203,7 +239,8 @@ public class Spotify implements MusicService {
 		LOGGER.info("Searching for related artists of artist: " + id);
 		return Observable.just(api.getAlbum(id).build())
 				.flatMap(this::asyncRequest)
-				.flatMap(a -> Observable.create(new PageObservable<>(api, a.getTracks())))
+				.flatMap(a -> Observable.create(PageObservable.create(api, a.getTracks()))
+						.observeOn(getRequestScheduler()))
 				.map(SimpleTrack::getId)
 				.buffer(TracksRequest.MAX_IDS)
 				.map(ids -> api.getTracks(ids).build())
@@ -214,7 +251,7 @@ public class Spotify implements MusicService {
 	
 	private <T> ObservableSource<T> asyncRequest(Request<T> request) {
 		return Observable.fromCallable(() -> request.exec())
-				.subscribeOn(Schedulers.io());
+				.observeOn(getRequestScheduler());
 	}
 
 	@Override
@@ -235,7 +272,8 @@ public class Spotify implements MusicService {
 		return Observable.just(api.getPlaylist("spotify", "37i9dQZF1DXcBWIGoYBM5M").build())
 				.flatMap(this::asyncRequest)
 				.map(Playlist::getTracks)
-				.flatMap(page -> Observable.create(new PageObservable<>(api, page)))
+				.flatMap(page -> Observable.create(PageObservable.create(api, page))
+						.observeOn(getRequestScheduler()))
 				.map(PlaylistTrack::getTrack)
 				.map(factory::toTrack);
 	}
@@ -243,12 +281,11 @@ public class Spotify implements MusicService {
 	@Override
 	public Observable<Artist> topArtists() {
 		LOGGER.info("Fetching top artists");
-		final ExecutorService pool = Executors.newSingleThreadExecutor();
 		return Observable.just(api.getPlaylist("spotifycharts", "37i9dQZEVXbMDoHDwVN2tF").build())
-				.map(request -> new FutureTask<>(() -> request.exec()))
-				.flatMap(future -> Observable.fromFuture(future, Schedulers.from(pool)))
+				.flatMap(this::asyncRequest)
 				.map(Playlist::getTracks)
-				.flatMap(page -> Observable.create(new PageObservable<>(api, page)))
+				.flatMap(page -> Observable.create(PageObservable.create(api, page))
+						.observeOn(getRequestScheduler()))
 				.map(PlaylistTrack::getTrack)
 				.map(factory::toTrack)
 				.map(Track::getMainArtists)
@@ -258,12 +295,11 @@ public class Spotify implements MusicService {
 	@Override
 	public Observable<Album> topAlbums() {
 		LOGGER.info("Fetching top albums");
-		final ExecutorService pool = Executors.newCachedThreadPool();
 		return Observable.just(api.getPlaylist("spotify", "37i9dQZF1DX0rV7skaITBo").build())
-				.map(request -> new FutureTask<>(() -> request.exec()))
-				.flatMap(future -> Observable.fromFuture(future, Schedulers.from(pool)))
+				.flatMap(this::asyncRequest)
 				.map(Playlist::getTracks)
-				.flatMap(page -> Observable.create(new PageObservable<>(api, page)))
+				.flatMap(page -> Observable.create(PageObservable.create(api, page))
+						.observeOn(getRequestScheduler()))
 				.map(PlaylistTrack::getTrack)
 				.map(com.wrapper.spotify.models.track.Track::getAlbum)
 				.map(SimpleAlbum::getId)

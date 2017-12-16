@@ -20,7 +20,7 @@ import org.rookit.dm.artist.Artist;
 import org.rookit.dm.artist.ArtistFactory;
 import org.rookit.dm.artist.TypeArtist;
 import org.rookit.dm.track.Track;
-import org.rookit.dm.utils.DMTestFactory;
+import org.rookit.dm.test.DMTestFactory;
 import org.rookit.dm.utils.PrintUtils;
 import com.google.common.collect.Sets;
 

@@ -113,6 +113,10 @@
 			<groupId>com.github.JPDSousa</groupId>
 			<artifactId>spotify-web-api-java</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>com.github.JPDSousa</groupId>
+			<artifactId>rookit-data-model-test</artifactId>
+		</dependency>
 	</dependencies>
 	<dependencyManagement>
 		<dependencies>
@@ -142,6 +146,7 @@
 				<groupId>org.mockito</groupId>
 				<artifactId>mockito-all</artifactId>
 				<version>1.10.19</version>
+				<scope>test</scope>
 			</dependency>
 			<dependency>
 				<groupId>org.mapdb</groupId>
@@ -187,6 +192,12 @@
 				<groupId>com.github.JPDSousa</groupId>
 				<artifactId>spotify-web-api-java</artifactId>
 				<version>-SNAPSHOT</version>
+			</dependency>
+			<dependency>
+				<groupId>com.github.JPDSousa</groupId>
+				<artifactId>rookit-data-model-test</artifactId>
+				<version>-SNAPSHOT</version>
+				<scope>test</scope>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>

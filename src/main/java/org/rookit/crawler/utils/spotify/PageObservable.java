@@ -1,9 +1,11 @@
 package org.rookit.crawler.utils.spotify;
 
 import java.io.IOException;
+import java.net.URL;
+import java.util.List;
 import java.util.logging.Logger;
 
-import org.mockito.Mockito;
+import org.apache.http.Header;
 
 import com.wrapper.spotify.Api;
 import com.wrapper.spotify.methods.Request;
@@ -27,15 +29,30 @@ public class PageObservable<T> implements ObservableOnSubscribe<T> {
 		return new PageObservable<>(api, createDummyRequest(page));
 	}
 
-	@SuppressWarnings("unchecked")
 	private static <I> Request<I> createDummyRequest(I item2Return) {
-		final Request<I> request = Mockito.mock(Request.class);
-		try {
-			Mockito.when(request.exec()).thenReturn(item2Return);
-			return request;
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
+		return new Request<I>() {
+
+			@Override
+			public I exec() throws IOException {
+				return item2Return;
+			}
+
+			@Override
+			public URL toUrl() {
+				return null;
+			}
+
+			@Override
+			public List<Header> getHeader() {
+				return null;
+			}
+
+			@Override
+			public String getBody() {
+				return null;
+			}
+			
+		};
 	}
 
 	private final Api api;

@@ -1,89 +1,24 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
-	<groupId>org.rookit</groupId>
 	<artifactId>rookit-web-crawler</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
-	<build>
-		<sourceDirectory>src/main/java</sourceDirectory>
-		<testSourceDirectory>src/test/java</testSourceDirectory>
-		<testResources>
-			<testResource>
-				<directory>src/test/resources</directory>
-			</testResource>
-		</testResources>
-		<plugins>
-			<plugin>
-				<artifactId>maven-compiler-plugin</artifactId>
-				<version>3.7.0</version>
-				<configuration>
-					<source>1.8</source>
-					<target>1.8</target>
-				</configuration>
-			</plugin>
-			<plugin>
-				<groupId>org.jacoco</groupId>
-				<artifactId>jacoco-maven-plugin</artifactId>
-				<version>0.7.9</version>
-				<executions>
-					<execution>
-						<goals>
-							<goal>prepare-agent</goal>
-						</goals>
-					</execution>
-					<execution>
-						<id>report</id>
-						<phase>test</phase>
-						<goals>
-							<goal>report</goal>
-						</goals>
-					</execution>
-				</executions>
-			</plugin>
-		</plugins>
-	</build>
-	<properties>
-		<maven.compiler.source>1.8</maven.compiler.source>
-		<maven.compiler.target>1.8</maven.compiler.target>
-		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-	</properties>
-	<repositories>
-		<repository>
-			<id>jitpack.io</id>
-			<url>https://jitpack.io</url>
-		</repository>
-	</repositories>
+	<parent>
+		<groupId>org.rookit</groupId>
+		<artifactId>rookit</artifactId>
+		<version>0.0.1-SNAPSHOT</version>
+	</parent>
 	<dependencies>
 		<dependency>
 			<groupId>com.github.jkovacs</groupId>
 			<artifactId>lastfm-java</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>junit</groupId>
-			<artifactId>junit</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.hamcrest</groupId>
-			<artifactId>hamcrest-all</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
 			<groupId>io.reactivex.rxjava2</groupId>
 			<artifactId>rxjava</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>org.mockito</groupId>
-			<artifactId>mockito-all</artifactId>
-		</dependency>
-		<dependency>
 			<groupId>org.mapdb</groupId>
 			<artifactId>mapdb</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.mongodb</groupId>
-			<artifactId>bson</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.commons</groupId>
@@ -99,23 +34,27 @@
 		</dependency>
 		<dependency>
 			<groupId>com.github.JPDSousa</groupId>
-			<artifactId>rookit-data-model</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>com.github.JPDSousa</groupId>
-			<artifactId>rookit-utils</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>com.github.JPDSousa</groupId>
-			<artifactId>rookit-parser</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>com.github.JPDSousa</groupId>
 			<artifactId>spotify-web-api-java</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>com.github.JPDSousa</groupId>
+			<groupId>org.rookit</groupId>
+			<artifactId>rookit-utils</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.rookit</groupId>
+			<artifactId>rookit-data-model</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.rookit</groupId>
 			<artifactId>rookit-data-model-test</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.rookit</groupId>
+			<artifactId>rookit-parser</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.rookit</groupId>
+			<artifactId>rookit-mongodb</artifactId>
 		</dependency>
 	</dependencies>
 	<dependencyManagement>
@@ -126,37 +65,14 @@
 				<version>acf212d1da</version>
 			</dependency>
 			<dependency>
-				<groupId>junit</groupId>
-				<artifactId>junit</artifactId>
-				<version>4.12</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
-				<groupId>org.hamcrest</groupId>
-				<artifactId>hamcrest-all</artifactId>
-				<version>1.3</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
 				<groupId>io.reactivex.rxjava2</groupId>
 				<artifactId>rxjava</artifactId>
 				<version>2.1.6</version>
 			</dependency>
 			<dependency>
-				<groupId>org.mockito</groupId>
-				<artifactId>mockito-all</artifactId>
-				<version>1.10.19</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
 				<groupId>org.mapdb</groupId>
 				<artifactId>mapdb</artifactId>
 				<version>3.0.5</version>
-			</dependency>
-			<dependency>
-				<groupId>org.mongodb</groupId>
-				<artifactId>bson</artifactId>
-				<version>3.3.0</version>
 			</dependency>
 			<dependency>
 				<groupId>org.apache.commons</groupId>
@@ -175,29 +91,33 @@
 			</dependency>
 			<dependency>
 				<groupId>com.github.JPDSousa</groupId>
-				<artifactId>rookit-data-model</artifactId>
-				<version>-SNAPSHOT</version>
-			</dependency>
-			<dependency>
-				<groupId>com.github.JPDSousa</groupId>
-				<artifactId>rookit-utils</artifactId>
-				<version>-SNAPSHOT</version>
-			</dependency>
-			<dependency>
-				<groupId>com.github.JPDSousa</groupId>
-				<artifactId>rookit-parser</artifactId>
-				<version>-SNAPSHOT</version>
-			</dependency>
-			<dependency>
-				<groupId>com.github.JPDSousa</groupId>
 				<artifactId>spotify-web-api-java</artifactId>
 				<version>-SNAPSHOT</version>
 			</dependency>
 			<dependency>
-				<groupId>com.github.JPDSousa</groupId>
+				<groupId>org.rookit</groupId>
+				<artifactId>rookit-utils</artifactId>
+				<version>${rookit.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.rookit</groupId>
+				<artifactId>rookit-data-model</artifactId>
+				<version>${rookit.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.rookit</groupId>
 				<artifactId>rookit-data-model-test</artifactId>
-				<version>-SNAPSHOT</version>
-				<scope>test</scope>
+				<version>${rookit.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.rookit</groupId>
+				<artifactId>rookit-parser</artifactId>
+				<version>${rookit.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.rookit</groupId>
+				<artifactId>rookit-mongodb</artifactId>
+				<version>${rookit.version}</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>

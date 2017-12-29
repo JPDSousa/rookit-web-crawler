@@ -19,6 +19,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.StringTokenizer;
 import java.util.stream.Collectors;
@@ -48,7 +49,8 @@ public class SpotifyFactory extends AbstractModelFactory<com.wrapper.spotify.mod
 	@Override
 	public Track toTrack(com.wrapper.spotify.models.track.Track source) {
 		final Track track = toTrack((SimpleTrack) source);
-		track.getExternalMetadata(SPOTIFY.name()).append(POPULARITY, source.getPopularity());
+		final Map<String, Object> extMeta = track.getExternalMetadata(SPOTIFY.name());
+		extMeta.put(POPULARITY, source.getPopularity());
 		// TODO add these fields
 		source.getExternalIds();
 		return track;
@@ -110,7 +112,8 @@ public class SpotifyFactory extends AbstractModelFactory<com.wrapper.spotify.mod
 				.flatMap(Collection::stream)
 				.collect(Collectors.toSet());
 		final Album album = toAlbum(source, artists);
-		album.getExternalMetadata(SPOTIFY.name()).append(POPULARITY, source.getPopularity());
+		final Map<String, Object> extMeta = album.getExternalMetadata(SPOTIFY.name());
+		extMeta.put(POPULARITY, source.getPopularity());
 		album.setGenres(source.getGenres().stream()
 				.map(genreFactory::createGenre)
 				.collect(Collectors.toSet()));
@@ -216,14 +219,14 @@ public class SpotifyFactory extends AbstractModelFactory<com.wrapper.spotify.mod
 	private Set<Artist> flatArtist(SimpleArtist source) {
 		final Set<Artist> flatArtists = artistFactory.getArtistsFromFormat(source.getName());
 		for(Artist artist : flatArtists) {
-			Document spotify = artist.getExternalMetadata(SPOTIFY.name());
+			Map<String, Object> spotify = artist.getExternalMetadata(SPOTIFY.name());
 			if(spotify == null) {
 				spotify = new Document();
 				artist.putExternalMetadata(SPOTIFY.name(), spotify);
 			}
-			spotify.append(ID, source.getId())
-			.append(URL, source.getHref())
-			.append(URI, source.getUri());
+			spotify.put(ID, source.getId());
+			spotify.put(URL, source.getHref());
+			spotify.put(URI, source.getUri());
 			//TODO add these fields
 			source.getExternalUrls();
 		}
@@ -239,13 +242,13 @@ public class SpotifyFactory extends AbstractModelFactory<com.wrapper.spotify.mod
 			genres.add(genreFactory.createGenre(genreName));
 		}
 		for(Artist artist : artists) {
-			final Document spotify = artist.getExternalMetadata(SPOTIFY.name());
+			final Map<String, Object> spotify = artist.getExternalMetadata(SPOTIFY.name());
 			if(biggest != null) {
 				artist.setPicture(biggest);
 			}
 			artist.setGenres(genres);
-			spotify.append(POPULARITY, source.getPopularity())
-			.append(LISTENERS, source.getFollowers());
+			spotify.put(POPULARITY, source.getPopularity());
+			spotify.put(LISTENERS, source.getFollowers());
 		}
 		return artists;
 	}

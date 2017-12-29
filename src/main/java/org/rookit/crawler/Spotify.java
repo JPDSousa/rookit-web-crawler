@@ -8,13 +8,12 @@ import java.util.Map;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
-import org.bson.Document;
 import org.mapdb.DB;
 import org.rookit.crawler.config.MusicServiceConfig;
 import org.rookit.crawler.config.SpotifyConfig;
 import org.rookit.crawler.factory.SpotifyFactory;
 import org.rookit.crawler.utils.spotify.PageObservable;
-import org.rookit.dm.RookitModel;
+import org.rookit.dm.MetadataHolder;
 import org.rookit.dm.album.Album;
 import org.rookit.dm.artist.Artist;
 import org.rookit.dm.genre.Genre;
@@ -154,9 +153,9 @@ public class Spotify implements MusicService {
 				.anyMatch(i -> Objects.equal(i, id));
 	}
 
-	private String getId(RookitModel element) {
-		final Document doc = element.getExternalMetadata(getName());
-		return doc != null ? doc.getString(ID) : null;
+	private String getId(MetadataHolder element) {
+		final Map<String, Object> doc = element.getExternalMetadata(getName());
+		return doc != null ? (String) doc.get(ID) : null;
 	}
 
 	@Override

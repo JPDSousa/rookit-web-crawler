@@ -44,7 +44,7 @@ public class RookitCrawlerTest {
 		final Track track = SingleTrackAlbumBuilder.create()
 				.withTitle("One")
 				.withMainArtists(artists)
-				.getTrack();
+				.buildTrack();
 		guineaPig.fillTrack(track).blockingAwait();
 		
 		assertNotNull(track.getExternalMetadata(AvailableServices.SPOTIFY.name()));

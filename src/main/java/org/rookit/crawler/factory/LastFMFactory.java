@@ -45,7 +45,7 @@ public class LastFMFactory extends AbstractModelFactory<de.umass.lastfm.Artist, 
 				.withExternalMetadata(MBRAINZ.name(), mBrainz)
 				.withExternalMetadata(LASTFM.name(), lastFM)
 				.withDuration(Duration.ofSeconds(source.getDuration()));
-		final Track track = builder.getTrack();
+		final Track track = builder.buildTrack();
 		final long plays = source.getPlaycount();
 		if(plays > 0) {
 			track.setPlays(plays);

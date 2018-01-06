@@ -7,73 +7,68 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.logging.Logger;
 
 import org.rookit.crawler.config.MusicServiceConfig;
-import org.rookit.dm.album.Album;
-import org.rookit.dm.album.similarity.AlbumComparator;
+import org.rookit.crawler.similarity.SimilarityProvider;
 import org.rookit.dm.artist.Artist;
-import org.rookit.dm.artist.similarity.ArtistComparator;
-import org.rookit.dm.genre.Genre;
-import org.rookit.dm.genre.similarity.GenreComparator;
-import org.rookit.dm.play.StaticPlaylist;
 import org.rookit.dm.play.able.Playable;
-import org.rookit.dm.play.similarity.PlaylistComparator;
+import org.rookit.dm.similarity.calculator.SimilarityMeasure;
+import org.rookit.dm.similarity.calculator.SimilarityPlaceholder;
 import org.rookit.dm.track.Track;
 import org.rookit.dm.track.audio.AudioFeature;
 import org.rookit.dm.track.audio.TrackKey;
 import org.rookit.dm.track.audio.TrackMode;
-import org.rookit.dm.track.similarity.TrackComparator;
-
-import com.google.common.collect.Maps;
 
 import io.reactivex.Completable;
+import io.reactivex.Maybe;
 import io.reactivex.Observable;
-import io.reactivex.functions.BiFunction;
 
 @SuppressWarnings("javadoc")
 public class RookitCrawler implements Closeable {
 
 	private static final Logger LOGGER = Logger.getLogger(RookitCrawler.class.getName());
 
-	private final Map<Class<?>, Comparator<?>> comparators;
 	private final ServiceProvider provider;
+	
+	private final SimilarityProvider measures;
 
 	public RookitCrawler(MusicServiceConfig config) {
 		provider = new ServiceProviderImpl(config);
-		comparators = Maps.newHashMapWithExpectedSize(5);
-		comparators.put(Track.class, new TrackComparator());
-		comparators.put(Artist.class, new ArtistComparator());
-		comparators.put(Album.class, new AlbumComparator());
-		comparators.put(Genre.class, new GenreComparator());
-		comparators.put(StaticPlaylist.class, new PlaylistComparator());
-		LOGGER.info("Crawler created with: " + comparators.keySet().toString());
+		measures = SimilarityProvider.create();
 	}
 
 	public Completable fillTrack(Track source) {
 		LOGGER.info("Filling: " + source.getLongFullTitle());
-		final Comparator<Track> comparator = getSimilarityCalculator(Track.class);
-
+		final SimilarityMeasure<Track> measure = measures.getMeasure(Track.class, source);
 		return Observable.fromArray(values())
 				.map(provider::getService)
 				.filter(Optional::isPresent)
 				.map(Optional::get)
 				.filter(service -> !source.getExternalMetadata().containsKey(service.getName()))
-				.flatMapMaybe(service -> service
-						.searchTrack(source)
-						.reduce(new Accumulator<>(source, comparator)))
+				.flatMapMaybe(service -> searchTrackOnService(measure, service, source))
 				.doAfterNext(track -> resolveTracks(source, track))
 				.ignoreElements();
+	}
+	
+	private Maybe<Track> searchTrackOnService(SimilarityMeasure<Track> measure, MusicService service, Track source) {
+		return service.searchTrack(source)
+				.map(measure::measure)
+				.filter(ph -> ph.getDistance() < 1)
+				.reduce(this::bestScore)
+				.map(SimilarityPlaceholder::getTarget);
+	}
+	
+	private <T> SimilarityPlaceholder<T> bestScore(SimilarityPlaceholder<T> ph1, SimilarityPlaceholder<T> ph2) {
+		return ph1.getDistance() < ph2.getDistance() ? ph1 : ph2;
 	}
 
 	private void resolveTracks(Track master, Track slave) {
 		LOGGER.info("Pushing '" + slave.getLongFullTitle() + "' to " + master.getLongFullTitle());
 		if (master.getType() != slave.getType()) {
-			throw new RuntimeException("[" + master.getLongFullTitle() + "] and [" + master.getLongFullTitle()
+			throw new RuntimeException("[" + master.getLongFullTitle() + "] and [" + slave.getLongFullTitle()
 			+ "] do not share the same type.");
 		}
 		// TODO how to resolve title conflicts??????
@@ -191,31 +186,6 @@ public class RookitCrawler implements Closeable {
 				}
 			}
 		}
-	}
-
-	@SuppressWarnings("unchecked")
-	private <T> Comparator<T> getSimilarityCalculator(Class<T> type) {
-		return (Comparator<T>) comparators.get(type);
-	}
-
-	private final class Accumulator<T> implements BiFunction<T, T, T> {
-
-		private final T master;
-		private final Comparator<T> comparator;
-
-		private Accumulator(T master, Comparator<T> comparator) {
-			super();
-			this.master = master;
-			this.comparator = comparator;
-		}
-
-		@Override
-		public T apply(T t, T u) {
-			final int score1 = Math.abs(comparator.compare(master, t));
-			final int score2 = Math.abs(comparator.compare(master, u));
-			return score1 < score2 ? t : u;
-		}
-
 	}
 
 	@Override

@@ -93,7 +93,7 @@ public class SpotifyFactory extends AbstractModelFactory<com.wrapper.spotify.mod
 				.withDuration(Duration.ofMillis(source.getDuration()))
 				.withExplicit(source.isExplicit())
 				.withExternalMetadata(SPOTIFY.name(), spotify)
-				.getTrack();
+				.buildTrack();
 		final Collection<Artist> features = track.getFeatures();
 		final Set<Artist> artists = source.getArtists().parallelStream()
 				.map(this::flatArtist)
